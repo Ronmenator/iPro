@@ -1,6 +1,6 @@
 {
-    "name": "ipro",
-    "version": "0.1.0",
+    "name": "iPro",
+    "version": "7.1.0",
     "dependencies": {
         "montage": "~0.15.0",
         "digit": "~0.5.0"
@@ -12,5 +12,12 @@
         "run-tests.html",
         "test"
     ],
-    "bundle": [ "ui/main.reel" ]
+    "bundle": [
+        "ui/main.reel"
+    ],
+    "author": {
+        "name": "iPRO Solutions (USA) Inc",
+        "email": "support@iprosolutions.com",
+        "url": "http://www.iprosolutions.com"
+    }
 }
