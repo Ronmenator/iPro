@@ -4,6 +4,7 @@ import TipTapEditor from './TipTapEditor'
 import VersionPanel from './VersionPanel'
 import OutlinePanel from './OutlinePanel'
 import ChapterSummaryView from './ChapterSummaryView'
+import PartSummaryView from './PartSummaryView'
 import { useDocumentStore } from '../store/documentStore'
 
 const EditorComponent = forwardRef((props, ref) => {
@@ -15,6 +16,9 @@ const EditorComponent = forwardRef((props, ref) => {
   const setCurrentDoc = useDocumentStore(state => state.setCurrentDoc)
   const currentDoc = useDocumentStore(state => state.getCurrentDoc())
 
+  // Check if this is a part path (starts with 'part-')
+  const isPartPath = currentPath.startsWith('part-')
+  
   // Check if this is a chapter path (starts with 'ch-')
   const isChapterPath = currentPath.startsWith('ch-')
   
@@ -64,7 +68,9 @@ const EditorComponent = forwardRef((props, ref) => {
       {shouldShowEditor && currentDoc && <OutlinePanel sceneId={currentPath} />}
       
       <div className="flex-1 overflow-hidden">
-        {isChapterPath ? (
+        {isPartPath ? (
+          <PartSummaryView partId={currentPath} />
+        ) : isChapterPath ? (
           <ChapterSummaryView chapterId={currentPath} />
         ) : shouldShowEditor && currentDoc ? (
           <TipTapEditor ref={ref} key={`${currentDoc.id}-${currentDoc.baseVersion}`} readOnly={editorMode === 'readonly'} doc={currentDoc} docId={currentDoc.id} />
@@ -78,7 +84,7 @@ const EditorComponent = forwardRef((props, ref) => {
         ) : (
           <div className="p-6">
             <p className="text-gray-500 dark:text-gray-400">
-              Select a scene or chapter to view the editor.
+              Select a part, chapter, or scene to view the editor.
             </p>
           </div>
         )}
