@@ -145,7 +145,7 @@ export default function PartSummaryView({ partId }: PartSummaryViewProps) {
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <h3 className="font-medium text-gray-900 dark:text-white">
-                          Chapter {chapter.number}: {chapter.title}
+                          {chapter.title}
                         </h3>
                         <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
                           {chapter.pov && <span>👤 {chapter.pov}</span>}
