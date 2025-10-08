@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import TipTapEditor from './TipTapEditor'
 import VersionPanel from './VersionPanel'
 import OutlinePanel from './OutlinePanel'
+import ChapterSummaryView from './ChapterSummaryView'
 import { useDocumentStore } from '../store/documentStore'
 
 const EditorComponent = forwardRef((props, ref) => {
@@ -14,8 +15,11 @@ const EditorComponent = forwardRef((props, ref) => {
   const setCurrentDoc = useDocumentStore(state => state.setCurrentDoc)
   const currentDoc = useDocumentStore(state => state.getCurrentDoc())
 
-  // Only show editor for scene, chapter, and research document paths
-  const shouldShowEditor = currentPath.includes('scene') || currentPath.includes('chapter') || currentPath.startsWith('research-')
+  // Check if this is a chapter path (starts with 'ch-')
+  const isChapterPath = currentPath.startsWith('ch-')
+  
+  // Only show editor for scene and research document paths
+  const shouldShowEditor = currentPath.includes('scene') || currentPath.startsWith('research-')
 
   useEffect(() => {
     if (shouldShowEditor) {
@@ -60,7 +64,9 @@ const EditorComponent = forwardRef((props, ref) => {
       {shouldShowEditor && currentDoc && <OutlinePanel sceneId={currentPath} />}
       
       <div className="flex-1 overflow-hidden">
-        {shouldShowEditor && currentDoc ? (
+        {isChapterPath ? (
+          <ChapterSummaryView chapterId={currentPath} />
+        ) : shouldShowEditor && currentDoc ? (
           <TipTapEditor ref={ref} key={`${currentDoc.id}-${currentDoc.baseVersion}`} readOnly={editorMode === 'readonly'} doc={currentDoc} docId={currentDoc.id} />
         ) : shouldShowEditor ? (
           <div className="p-6 flex items-center justify-center">
