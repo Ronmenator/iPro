@@ -1,0 +1,29 @@
+{
+  "tense": "past",
+  "person": "third",
+  "banlist": [
+    "very",
+    "really",
+    "quite",
+    "rather",
+    "somehow",
+    "somewhat",
+    "just"
+  ],
+  "preferences": {
+    "maxParagraphLength": 500,
+    "maxSentenceLength": 40,
+    "avoidPassiveVoice": true,
+    "limitAdverbs": true,
+    "avoidClichés": true
+  },
+  "toneGuidelines": "Maintain a mysterious and atmospheric tone. Show, don't tell. Build tension gradually.",
+  "clichés": [
+    "at the end of the day",
+    "think outside the box",
+    "low-hanging fruit",
+    "back to the drawing board",
+    "hit the ground running"
+  ]
+}
+
