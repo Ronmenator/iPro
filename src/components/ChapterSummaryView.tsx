@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useManuscriptStore } from '../store/manuscriptStore';
 import { useOutlineStore } from '../store/outlineStore';
+import { generateScenesForChapter } from '../ai/sceneGenerator';
 
 interface ChapterSummaryViewProps {
   chapterId: string;
@@ -12,9 +13,24 @@ export default function ChapterSummaryView({ chapterId }: ChapterSummaryViewProp
   const getCard = useOutlineStore(state => state.getCard);
   const getChapterCard = useOutlineStore(state => state.getChapterCard);
 
+  const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
+
   const chapter = getChapter(chapterId);
   const scenes = getScenesByChapter(chapterId);
   const chapterCard = getChapterCard(chapterId);
+
+  const handleGenerateScenes = async () => {
+    setIsGeneratingScenes(true);
+    try {
+      await generateScenesForChapter(chapterId);
+      // The scenes will be automatically updated in the UI due to store changes
+    } catch (error) {
+      console.error('Failed to generate scenes:', error);
+      alert('Failed to generate scenes. Please try again.');
+    } finally {
+      setIsGeneratingScenes(false);
+    }
+  };
 
   // Calculate word counts from scenes
   const totalTargetWords = scenes.reduce((sum, scene) => sum + (scene.wordsTarget || 0), 0);
@@ -163,7 +179,14 @@ export default function ChapterSummaryView({ chapterId }: ChapterSummaryViewProp
           </h2>
           {scenes.length === 0 ? (
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
-              <p className="text-gray-500 dark:text-gray-400">No scenes in this chapter yet.</p>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">No scenes in this chapter yet.</p>
+              <button
+                onClick={handleGenerateScenes}
+                disabled={isGeneratingScenes}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-md transition-colors"
+              >
+                {isGeneratingScenes ? 'Generating Scenes...' : 'Generate Scenes with AI'}
+              </button>
             </div>
           ) : (
             <div className="space-y-4">

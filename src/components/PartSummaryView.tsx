@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useManuscriptStore } from '../store/manuscriptStore';
 import { useOutlineStore } from '../store/outlineStore';
+import { generateScenesForChapter } from '../ai/sceneGenerator';
 
 interface PartSummaryViewProps {
   partId: string;
@@ -12,8 +13,23 @@ export default function PartSummaryView({ partId }: PartSummaryViewProps) {
   const getScenesByChapter = useManuscriptStore(state => state.getScenesByChapter);
   const getChapterCard = useOutlineStore(state => state.getChapterCard);
 
+  const [generatingScenes, setGeneratingScenes] = useState<string | null>(null);
+
   const part = getPart(partId);
   const chapters = getChaptersByPart(partId);
+
+  const handleGenerateScenes = async (chapterId: string) => {
+    setGeneratingScenes(chapterId);
+    try {
+      await generateScenesForChapter(chapterId);
+      // The scenes will be automatically updated in the UI due to store changes
+    } catch (error) {
+      console.error('Failed to generate scenes:', error);
+      alert('Failed to generate scenes. Please try again.');
+    } finally {
+      setGeneratingScenes(null);
+    }
+  };
 
   if (!part) {
     return (
@@ -208,9 +224,9 @@ export default function PartSummaryView({ partId }: PartSummaryViewProps) {
                     )}
 
                     {/* Scenes Preview */}
-                    {scenes.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-                        <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Scenes:</span>
+                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                      <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Scenes:</span>
+                      {scenes.length > 0 ? (
                         <div className="flex flex-wrap gap-1 mt-2">
                           {scenes.map((scene, sceneIndex) => (
                             <span 
@@ -221,8 +237,19 @@ export default function PartSummaryView({ partId }: PartSummaryViewProps) {
                             </span>
                           ))}
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="mt-2 flex items-center justify-between">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">No scenes yet</p>
+                          <button
+                            onClick={() => handleGenerateScenes(chapter.id)}
+                            disabled={generatingScenes === chapter.id}
+                            className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-md transition-colors"
+                          >
+                            {generatingScenes === chapter.id ? 'Generating...' : 'Generate Scenes'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}

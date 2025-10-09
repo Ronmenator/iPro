@@ -415,6 +415,42 @@ export function createAgentTools(llm: LlmClient, context: AgentContext): AgentTo
         }
       }
     },
+    {
+      name: 'generate_scenes_for_chapter',
+      description: 'Generate scenes for a specific chapter using AI. This creates 3 scenes with proper structure and metadata.',
+      parameters: {
+        type: 'object',
+        properties: {
+          chapterId: {
+            type: 'string',
+            description: 'The ID of the chapter to generate scenes for'
+          }
+        },
+        required: ['chapterId']
+      },
+      handler: async (params) => {
+        const { chapterId } = params;
+        
+        try {
+          // Import the scene generation function
+          const { generateScenesForChapter } = await import('./sceneGenerator');
+          const result = await generateScenesForChapter(chapterId);
+          
+          return {
+            success: true,
+            message: `Generated ${result.scenes.length} scenes for chapter ${chapterId}`,
+            scenes: result.scenes,
+            chapterId: result.chapterId
+          };
+        } catch (error) {
+          return {
+            success: false,
+            message: `Failed to generate scenes: ${error.message}`,
+            error: error.message
+          };
+        }
+      }
+    },
     // Add research tools
     ...researchTools
   ];
