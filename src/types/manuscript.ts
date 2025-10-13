@@ -7,7 +7,7 @@
 /**
  * Scene Metadata
  * One scene = one editable .md file with block IDs
- * Accompanying .meta.yml stores metadata
+ * Accompanying .meta.json stores metadata
  */
 export interface SceneMetadata {
   id: string;                    // e.g., "scene-01"
@@ -36,11 +36,10 @@ export interface SceneMetadata {
 /**
  * Chapter Metadata
  * Chapter = container for 1–6 scenes
- * The chapter file (ch-XX.meta.yml) holds metadata
+ * The chapter file (ch-XX.meta.json) holds metadata
  */
 export interface ChapterMetadata {
   id: string;                    // e.g., "ch-01"
-  part?: string;                 // Parent part ID, e.g., "part-01"
   title: string;                 // e.g., "The Bells of Oxford"
   number: number;                // Chapter number for ordering
   
@@ -78,12 +77,11 @@ export interface PartMetadata {
  * Full book hierarchy
  */
 export interface ManuscriptStructure {
-  parts: Map<string, PartMetadata>;
   chapters: Map<string, ChapterMetadata>;
   scenes: Map<string, SceneMetadata>;
   
   // Ordering
-  partOrder: string[];           // Ordered list of part IDs
+  chapterOrder: string[];        // Ordered list of chapter IDs
   
   lastModified: number;
 }
@@ -130,13 +128,13 @@ export const MANUSCRIPT_PATHS: ManuscriptPaths = {
   sceneMarkdown: (partId, chapterId, sceneId) => 
     `manuscript/${partId}/${chapterId}/${sceneId}.md`,
   sceneMetadata: (partId, chapterId, sceneId) => 
-    `manuscript/${partId}/${chapterId}/${sceneId}.meta.yml`,
+    `manuscript/${partId}/${chapterId}/${sceneId}.meta.json`,
   chapterMetadata: (partId, chapterId) => 
-    `manuscript/${partId}/${chapterId}/${chapterId}.meta.yml`,
+    `manuscript/${partId}/${chapterId}/${chapterId}.meta.json`,
   chapterMarkdown: (partId, chapterId) => 
     `manuscript/${partId}/${chapterId}/${chapterId}.md`,
   partMetadata: (partId) => 
-    `manuscript/${partId}/${partId}.meta.yml`,
+    `manuscript/${partId}/${partId}.meta.json`,
 };
 
 /**

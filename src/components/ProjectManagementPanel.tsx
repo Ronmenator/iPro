@@ -15,6 +15,7 @@ import {
   getCurrentProjectId,
   SavedProject,
 } from '../utils/projectManager';
+import { autoSaveService } from '../services/autoSaveService';
 
 interface ProjectListItem {
   id: string;
@@ -103,6 +104,8 @@ export default function ProjectManagementPanel({
       );
 
       if (result.success) {
+        // Trigger auto-save after successful project save
+        autoSaveService.forceSave();
         setMessage('✓ Project saved successfully!');
         setCurrentProjectId(result.projectId || null);
         await loadProjectsList();

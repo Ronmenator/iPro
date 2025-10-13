@@ -173,23 +173,27 @@ export default function WizardPCC5({ onClose, initialIdea = '' }: WizardPCC5Prop
 
       console.log('Generated files:', Array.from(allFiles.keys()));
 
-      // Save YAML files for download (structure files)
-      const yamlFiles = Array.from(structureFiles.entries()).filter(([path]) => path.endsWith('.yml'));
+      // Save JSON files for download (structure files)
+      const jsonFiles = Array.from(structureFiles.entries()).filter(([path]) => path.endsWith('.json'));
 
-      if (yamlFiles.length > 0) {
-        // Create a downloadable archive of YAML files
-        const yamlContent = yamlFiles.map(([path, content]) =>
-          `=== ${path} ===\n${content}\n`
-        ).join('\n');
+      if (jsonFiles.length > 0) {
+        // Create a single JSON file with all the data
+        const combinedData = {
+          outline: JSON.parse(jsonFiles.find(([path]) => path.includes('outline'))?.[1] || '{}'),
+          characters: JSON.parse(jsonFiles.find(([path]) => path.includes('cast'))?.[1] || '[]'),
+          ...JSON.parse(jsonFiles.find(([path]) => path.includes('structure'))?.[1] || '{}')
+        };
 
-        // Create download link for YAML files
-        const yamlBlob = new Blob([yamlContent], { type: 'text/plain' });
-        const yamlUrl = URL.createObjectURL(yamlBlob);
-        const yamlLink = document.createElement('a');
-        yamlLink.href = yamlUrl;
-        yamlLink.download = 'pcc5-structure-files.yml';
-        yamlLink.click();
-        URL.revokeObjectURL(yamlUrl);
+        const jsonContent = JSON.stringify(combinedData, null, 2);
+
+        // Create download link for JSON files
+        const jsonBlob = new Blob([jsonContent], { type: 'application/json' });
+        const jsonUrl = URL.createObjectURL(jsonBlob);
+        const jsonLink = document.createElement('a');
+        jsonLink.href = jsonUrl;
+        jsonLink.download = 'pcc5-story-structure.json';
+        jsonLink.click();
+        URL.revokeObjectURL(jsonUrl);
       }
 
       // Save scene markdown files as project documents
@@ -210,7 +214,7 @@ export default function WizardPCC5({ onClose, initialIdea = '' }: WizardPCC5Prop
 
       // Show success message with download info
       const message = `Successfully generated ${allFiles.size} files!\n\n` +
-        `✅ ${yamlFiles.length} YAML structure files downloaded\n` +
+        `✅ ${jsonFiles.length} JSON structure files downloaded\n` +
         `✅ ${mdFiles.length} scene documents saved to project\n\n` +
         `Files generated:\n${Array.from(allFiles.keys()).join('\n')}`;
 

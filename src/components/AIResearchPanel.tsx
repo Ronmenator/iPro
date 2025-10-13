@@ -8,7 +8,7 @@ import {
 import { useResearchStore } from '../store/researchStore';
 import { useChatStore } from '../store/chatStore';
 import { useDocumentStore } from '../store/documentStore';
-import { getLLMClient } from '../ai/providers';
+import { getCurrentAIProvider } from '../ai/providers';
 
 interface AIResearchPanelProps {
   currentDocId?: string;
@@ -84,7 +84,7 @@ export default function AIResearchPanel({ currentDocId }: AIResearchPanelProps) 
       // Generate a meaningful two-word name using AI
       let meaningfulTitle = title;
       try {
-        const llm = getLLMClient();
+        const llm = getCurrentAIProvider();
         if (llm) {
           const response = await llm([
             {

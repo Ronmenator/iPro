@@ -1,85 +1,122 @@
 import { create } from 'zustand';
+import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { OutlineCard, ChapterOutlineCard, DeleteGuardResult } from '../types/outline';
+
+interface OutlineDB extends DBSchema {
+  cards: {
+    key: string;
+    value: OutlineCard;
+  };
+  chapterCards: {
+    key: string;
+    value: ChapterOutlineCard;
+  };
+}
 
 interface OutlineStore {
   cards: Map<string, OutlineCard>;
   chapterCards: Map<string, ChapterOutlineCard>;
+  db: IDBPDatabase<OutlineDB> | null;
   
   // Scene Actions
   getCard: (sceneId: string) => OutlineCard | null;
-  setCard: (card: OutlineCard) => void;
-  updateCard: (sceneId: string, updates: Partial<OutlineCard>) => void;
-  deleteCard: (sceneId: string) => void;
-  addRequiredBeat: (sceneId: string, blockId: string) => void;
-  removeRequiredBeat: (sceneId: string, blockId: string) => void;
+  setCard: (card: OutlineCard) => Promise<void>;
+  updateCard: (sceneId: string, updates: Partial<OutlineCard>) => Promise<void>;
+  deleteCard: (sceneId: string) => Promise<void>;
+  addRequiredBeat: (sceneId: string, blockId: string) => Promise<void>;
+  removeRequiredBeat: (sceneId: string, blockId: string) => Promise<void>;
   checkDeleteGuard: (sceneId: string, blockId: string) => DeleteGuardResult;
   getCardsByChapter: (chapterId: string) => OutlineCard[];
-  renameCard: (sceneId: string, newTitle: string) => void;
+  renameCard: (sceneId: string, newTitle: string) => Promise<void>;
   
   // Chapter Actions
   getChapterCard: (chapterId: string) => ChapterOutlineCard | null;
-  setChapterCard: (card: ChapterOutlineCard) => void;
-  updateChapterCard: (chapterId: string, updates: Partial<ChapterOutlineCard>) => void;
-  deleteChapterCard: (chapterId: string) => void;
-  renameChapterCard: (chapterId: string, newTitle: string) => void;
+  setChapterCard: (card: ChapterOutlineCard) => Promise<void>;
+  updateChapterCard: (chapterId: string, updates: Partial<ChapterOutlineCard>) => Promise<void>;
+  deleteChapterCard: (chapterId: string) => Promise<void>;
+  renameChapterCard: (chapterId: string, newTitle: string) => Promise<void>;
+  
+  // Database
+  initDB: () => Promise<void>;
+  loadCards: () => Promise<void>;
+  saveCard: (card: OutlineCard) => Promise<void>;
+  saveChapterCard: (card: ChapterOutlineCard) => Promise<void>;
   
   // Initialize
   initializeDefaultCards: () => void;
+  
+  // Clear all cards
+  clearAllCards: () => Promise<void>;
 }
+
+const DB_NAME = 'MondayOutlineDB';
+const DB_VERSION = 1;
 
 export const useOutlineStore = create<OutlineStore>((set, get) => ({
   cards: new Map(),
   chapterCards: new Map(),
+  db: null,
 
   // Scene Actions
   getCard: (sceneId) => {
     return get().cards.get(sceneId) || null;
   },
 
-  setCard: (card) => {
+  setCard: async (card) => {
     const { cards } = get();
     cards.set(card.sceneId, card);
     set({ cards: new Map(cards) });
+    await get().saveCard(card);
   },
 
-  updateCard: (sceneId, updates) => {
+  updateCard: async (sceneId, updates) => {
     const { cards } = get();
     const card = cards.get(sceneId);
     if (card) {
-      cards.set(sceneId, { ...card, ...updates, lastModified: Date.now() });
+      const updatedCard = { ...card, ...updates, lastModified: Date.now() };
+      cards.set(sceneId, updatedCard);
       set({ cards: new Map(cards) });
+      await get().saveCard(updatedCard);
     }
   },
 
-  deleteCard: (sceneId) => {
-    const { cards } = get();
+  deleteCard: async (sceneId) => {
+    const { cards, db } = get();
     cards.delete(sceneId);
     set({ cards: new Map(cards) });
+    
+    if (db) {
+      await db.delete('cards', sceneId);
+    }
   },
 
-  addRequiredBeat: (sceneId, blockId) => {
+  addRequiredBeat: async (sceneId, blockId) => {
     const { cards } = get();
     const card = cards.get(sceneId);
     if (card && !card.requiredBeats.includes(blockId)) {
-      cards.set(sceneId, {
+      const updatedCard = {
         ...card,
         requiredBeats: [...card.requiredBeats, blockId],
         lastModified: Date.now(),
-      });
+      };
+      cards.set(sceneId, updatedCard);
       set({ cards: new Map(cards) });
+      await get().saveCard(updatedCard);
     }
   },
 
-  removeRequiredBeat: (sceneId, blockId) => {
+  removeRequiredBeat: async (sceneId, blockId) => {
     const { cards } = get();
     const card = cards.get(sceneId);
     if (card) {
-      cards.set(sceneId, {
+      const updatedCard = {
         ...card,
         requiredBeats: card.requiredBeats.filter(id => id !== blockId),
         lastModified: Date.now(),
-      });
+      };
+      cards.set(sceneId, updatedCard);
       set({ cards: new Map(cards) });
+      await get().saveCard(updatedCard);
     }
   },
 
@@ -107,12 +144,14 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
     return Array.from(cards.values()).filter(card => card.chapterId === chapterId);
   },
 
-  renameCard: (sceneId, newTitle) => {
+  renameCard: async (sceneId, newTitle) => {
     const { cards } = get();
     const card = cards.get(sceneId);
     if (card) {
-      cards.set(sceneId, { ...card, title: newTitle, lastModified: Date.now() });
+      const updatedCard = { ...card, title: newTitle, lastModified: Date.now() };
+      cards.set(sceneId, updatedCard);
       set({ cards: new Map(cards) });
+      await get().saveCard(updatedCard);
     }
   },
 
@@ -121,98 +160,110 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
     return get().chapterCards.get(chapterId) || null;
   },
 
-  setChapterCard: (card) => {
+  setChapterCard: async (card) => {
     const { chapterCards } = get();
     chapterCards.set(card.chapterId, card);
     set({ chapterCards: new Map(chapterCards) });
+    await get().saveChapterCard(card);
   },
 
-  updateChapterCard: (chapterId, updates) => {
+  updateChapterCard: async (chapterId, updates) => {
     const { chapterCards } = get();
     const card = chapterCards.get(chapterId);
     if (card) {
-      chapterCards.set(chapterId, { ...card, ...updates, lastModified: Date.now() });
+      const updatedCard = { ...card, ...updates, lastModified: Date.now() };
+      chapterCards.set(chapterId, updatedCard);
       set({ chapterCards: new Map(chapterCards) });
+      await get().saveChapterCard(updatedCard);
     }
   },
 
-  deleteChapterCard: (chapterId) => {
-    const { chapterCards } = get();
+  deleteChapterCard: async (chapterId) => {
+    const { chapterCards, db } = get();
     chapterCards.delete(chapterId);
     set({ chapterCards: new Map(chapterCards) });
+    
+    if (db) {
+      await db.delete('chapterCards', chapterId);
+    }
   },
 
-  renameChapterCard: (chapterId, newTitle) => {
+  renameChapterCard: async (chapterId, newTitle) => {
     const { chapterCards } = get();
     const card = chapterCards.get(chapterId);
     if (card) {
-      chapterCards.set(chapterId, { ...card, title: newTitle, lastModified: Date.now() });
+      const updatedCard = { ...card, title: newTitle, lastModified: Date.now() };
+      chapterCards.set(chapterId, updatedCard);
       set({ chapterCards: new Map(chapterCards) });
+      await get().saveChapterCard(updatedCard);
+    }
+  },
+
+  // Database
+  initDB: async () => {
+    const db = await openDB<OutlineDB>(DB_NAME, DB_VERSION, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains('cards')) {
+          db.createObjectStore('cards', { keyPath: 'sceneId' });
+        }
+        if (!db.objectStoreNames.contains('chapterCards')) {
+          db.createObjectStore('chapterCards', { keyPath: 'chapterId' });
+        }
+      },
+    });
+    set({ db });
+    await get().loadCards();
+  },
+
+  loadCards: async () => {
+    const { db } = get();
+    if (!db) return;
+
+    const cards = await db.getAll('cards');
+    const chapterCards = await db.getAll('chapterCards');
+
+    const cardsMap = new Map(cards.map(c => [c.sceneId, c]));
+    const chapterCardsMap = new Map(chapterCards.map(c => [c.chapterId, c]));
+
+    set({ cards: cardsMap, chapterCards: chapterCardsMap });
+  },
+
+  saveCard: async (card) => {
+    const { db } = get();
+    if (db) {
+      await db.put('cards', card);
+    }
+  },
+
+  saveChapterCard: async (card) => {
+    const { db } = get();
+    if (db) {
+      await db.put('chapterCards', card);
     }
   },
 
   initializeDefaultCards: () => {
-    const defaultChapterCards: ChapterOutlineCard[] = [
-      {
-        id: 'outline_ch_01',
-        chapterId: 'ch-01',
-        title: 'Chapter 01 - The Haunted House',
-        pov: 'Sarah',
-        theme: 'Mystery and curiosity',
-        summary: 'Sarah discovers a mysterious abandoned house and decides to investigate',
-        lastModified: Date.now(),
-      },
-    ];
-
-    const defaultCards: OutlineCard[] = [
-      {
-        id: 'outline_scene_01',
-        sceneId: 'scene-01',
-        chapterId: 'ch-01',
-        title: 'Scene 01 - Opening',
-        goal: 'Establish the mysterious atmosphere and introduce Sarah',
-        conflict: 'The abandoned house appears normal by day but shows strange lights at night',
-        outcome: 'Sarah witnesses the lights and decides to investigate',
-        clock: 'The lights only appear at midnight',
-        crucible: 'Sarah\'s curiosity about the unexplained phenomenon',
-        requiredBeats: [],
-        lastModified: Date.now(),
-      },
-      {
-        id: 'outline_scene_02',
-        sceneId: 'scene-02',
-        chapterId: 'ch-01',
-        title: 'Scene 02 - Discovery',
-        goal: 'Sarah enters the house to find answers',
-        conflict: 'The house is dangerous and eerie, with an unknown presence',
-        outcome: 'Sarah encounters the keeper and learns she may be trapped',
-        clock: 'Daylight is fading, night is approaching',
-        crucible: 'The door closes behind her, limiting escape routes',
-        requiredBeats: [],
-        lastModified: Date.now(),
-      },
-      {
-        id: 'outline_scene_03',
-        sceneId: 'scene-03',
-        chapterId: 'ch-01',
-        title: 'Scene 03 - Confrontation',
-        goal: 'Understand who the keeper is and why the house exists',
-        conflict: 'The keeper is cryptic and may not be trustworthy',
-        outcome: 'Sarah learns she must make a choice that will determine her fate',
-        clock: 'Must decide before sunrise',
-        crucible: 'The keeper hints that leaving may be impossible',
-        requiredBeats: [],
-        lastModified: Date.now(),
-      },
-    ];
-
+    // No longer create default cards to avoid scenes without manuscript data
+    // Outline cards should only be created when scenes are actually added to the manuscript
     const cards = new Map<string, OutlineCard>();
-    defaultCards.forEach(card => cards.set(card.sceneId, card));
-    
     const chapterCards = new Map<string, ChapterOutlineCard>();
-    defaultChapterCards.forEach(card => chapterCards.set(card.chapterId, card));
     
     set({ cards, chapterCards });
+  },
+
+  clearAllCards: async () => {
+    const { db } = get();
+    
+    // Clear from memory
+    set({ cards: new Map(), chapterCards: new Map() });
+    
+    // Clear from database
+    if (db) {
+      const tx = db.transaction(['cards', 'chapterCards'], 'readwrite');
+      await tx.objectStore('cards').clear();
+      await tx.objectStore('chapterCards').clear();
+      await tx.done;
+    }
   },
 }));
 

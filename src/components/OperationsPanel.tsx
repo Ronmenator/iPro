@@ -9,6 +9,7 @@ import { DeleteGuardResult } from '../types/outline';
 import DiffViewer from './DiffViewer';
 import InlineDiff from './InlineDiff';
 import DeleteGuardDialog from './DeleteGuardDialog';
+import { autoSaveService } from '../services/autoSaveService';
 
 export default function OperationsPanel({ isOpen, onToggle }: { isOpen: boolean; onToggle: () => void }) {
   const [selectedOp, setSelectedOp] = useState<string>('replace');
@@ -130,6 +131,8 @@ export default function OperationsPanel({ isOpen, onToggle }: { isOpen: boolean;
       if (applyResult.result.ok) {
         if (applyResult.newBlocks) {
           await updateDocument(currentDoc.id, applyResult.newBlocks);
+          // Trigger auto-save after successful operation
+          autoSaveService.forceSave();
           setResult(`✅ Applied successfully! New version: ${applyResult.result.newVersion.slice(0, 12)}...`);
         }
       } else {

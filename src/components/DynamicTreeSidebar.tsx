@@ -313,7 +313,7 @@ export default function DynamicTreeSidebar({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
 
-  const { getAllParts, getAllChapters, getAllScenes, getChaptersByPart, getScenesByChapter, setPart, setChapter, setScene, deletePart, deleteChapter, deleteScene, addChapterToPart, addSceneToChapter, saveStructure, partOrder, renamePart, renameChapter, renameScene, parts, chapters, scenes } = useManuscriptStore();
+  const { getAllChapters, getAllScenes, getScenesByChapter, setChapter, setScene, deleteChapter, deleteScene, addSceneToChapter, saveStructure, chapterOrder, renameChapter, renameScene, chapters, scenes } = useManuscriptStore();
   const { metadata } = useProjectStore();
   const { cards, chapterCards, setCard, setChapterCard, deleteCard, deleteChapterCard, renameCard, renameChapterCard } = useOutlineStore();
   const { createDocument, deleteDocument, documents } = useDocumentStore();
@@ -329,38 +329,27 @@ export default function DynamicTreeSidebar({
   useEffect(() => {
     // Build tree from stores
     buildTree();
-  }, [parts, chapters, scenes, metadata, cards, chapterCards, partOrder, documents]);
+  }, [chapters, scenes, metadata, cards, chapterCards, chapterOrder, documents]);
 
   const buildTree = () => {
-    const parts = getAllParts();
     const chapters = getAllChapters();
     const scenes = getAllScenes();
 
-    // Build manuscript structure
-    const manuscriptChildren: TreeNode[] = parts.map((part) => {
-      const partChapters = chapters.filter((ch) => ch.part === part.id);
+    // Build manuscript structure - chapters directly under manuscript
+    const manuscriptChildren: TreeNode[] = chapters.map((chapter) => {
+      const chapterScenes = scenes.filter((sc) => sc.chapter === chapter.id);
 
       return {
-        id: part.id,
-        name: `${part.title}`,
+        id: chapter.id,
+        name: `${chapter.title}`,
         type: 'folder' as const,
-        meta: { itemType: 'part', data: part },
-        children: partChapters.map((chapter) => {
-          const chapterScenes = scenes.filter((sc) => sc.chapter === chapter.id);
-
-          return {
-            id: chapter.id,
-            name: `${chapter.title}`,
-            type: 'folder' as const,
-            meta: { itemType: 'chapter', data: chapter },
-            children: chapterScenes.map((scene) => ({
-              id: `scene/${scene.id}`,
-              name: scene.title,
-              type: 'file' as const,
-              meta: { itemType: 'scene', data: scene },
-            })),
-          };
-        }),
+        meta: { itemType: 'chapter', data: chapter },
+        children: chapterScenes.map((scene) => ({
+          id: `scene/${scene.id}`,
+          name: scene.title,
+          type: 'file' as const,
+          meta: { itemType: 'scene', data: scene },
+        })),
       };
     });
 
@@ -373,10 +362,31 @@ export default function DynamicTreeSidebar({
       return {
         id: `outline/${chapterCard.chapterId}`,
         name: chapterCard.title,
-        type: 'file' as const,
+        type: 'folder' as const,
         meta: { itemType: 'outline-chapter', data: chapterCard },
+        children: sceneCards.map((sceneCard) => ({
+          id: `outline-scene/${sceneCard.sceneId}`,
+          name: sceneCard.title,
+          type: 'file' as const,
+          meta: { itemType: 'outline-scene', data: sceneCard },
+        })),
       };
     });
+
+    // Add scene cards that don't have chapter cards as direct children
+    const orphanedSceneCards = Array.from(cards.values()).filter(
+      (card) => !chapterCards.has(card.chapterId)
+    );
+    
+    const orphanedSceneNodes: TreeNode[] = orphanedSceneCards.map((sceneCard) => ({
+      id: `outline-scene/${sceneCard.sceneId}`,
+      name: sceneCard.title,
+      type: 'file' as const,
+      meta: { itemType: 'outline-scene', data: sceneCard },
+    }));
+
+    // Combine chapter outline nodes with orphaned scene nodes
+    const allOutlineChildren = [...outlineChildren, ...orphanedSceneNodes];
 
     // Build research structure from research documents
     const researchChildren: TreeNode[] = Array.from(documents.values())
@@ -405,7 +415,7 @@ export default function DynamicTreeSidebar({
         type: 'folder',
         children: [
           { id: 'wizard/pcc5', name: '🎭 Generate from Idea', type: 'file' },
-          ...outlineChildren,
+          ...allOutlineChildren,
         ],
       },
       {
@@ -428,35 +438,35 @@ export default function DynamicTreeSidebar({
   const handleAdd = async (parentId: string, parentType: string) => {
     try {
       if (parentId === 'manuscript') {
-        // Add new Part
-        const parts = getAllParts();
-        const displayNumber = parts.length + 1; // numbering based on existing items at this level
+        // Add new Chapter directly to manuscript
+        const chapters = getAllChapters();
+        const displayNumber = chapters.length + 1; // numbering based on existing items at this level
 
-        // Create a globally unique part id (avoid collisions with any references)
-        const existingPartIds = new Set<string>([
-          ...parts.map((p) => p.id),
-          ...getAllChapters().map((c) => c.part).filter(Boolean) as string[],
+        // Create a globally unique chapter id (avoid collisions with any references)
+        const existingChapterIds = new Set<string>([
+          ...chapters.map((c) => c.id),
+          ...getAllScenes().map((s) => s.chapter).filter(Boolean) as string[],
         ]);
-        let idCounter = Math.max(1, parts.length + 1);
-        let candidateId = `part-${String(idCounter).padStart(2, '0')}`;
-        while (existingPartIds.has(candidateId)) {
+        let idCounter = Math.max(1, chapters.length + 1);
+        let candidateId = `ch-${String(idCounter).padStart(2, '0')}`;
+        while (existingChapterIds.has(candidateId)) {
           idCounter += 1;
-          candidateId = `part-${String(idCounter).padStart(2, '0')}`;
+          candidateId = `ch-${String(idCounter).padStart(2, '0')}`;
         }
 
-        await setPart({
+        await setChapter({
           id: candidateId,
-          title: `Part ${String(displayNumber).padStart(2, '0')}: New Part`,
+          title: `Chapter ${String(displayNumber).padStart(2, '0')}: New Chapter`,
           number: displayNumber,
           summary: '',
-          chapters: [],
+          scenes: [],
           lastModified: Date.now(),
         });
 
-        // Add to partOrder
-        const { partOrder } = useManuscriptStore.getState();
-        const newPartOrder = [...partOrder, candidateId];
-        useManuscriptStore.setState({ partOrder: newPartOrder });
+        // Add to chapterOrder
+        const { chapterOrder } = useManuscriptStore.getState();
+        const newChapterOrder = [...chapterOrder, candidateId];
+        useManuscriptStore.setState({ chapterOrder: newChapterOrder });
 
         await saveStructure();
         buildTree();
@@ -464,41 +474,6 @@ export default function DynamicTreeSidebar({
         // Research items are managed through the ResearchPanel
         // This is handled by the research store and UI
         console.log('Research items are managed through the Research Panel');
-      } else if (parentType === 'folder' && parentId.startsWith('part-')) {
-        // Add new Chapter to Part
-        const part = getAllParts().find((p) => p.id === parentId);
-        if (!part) return;
-
-        // Display numbering should be based on siblings under this part
-        const siblingChapters = getChaptersByPart(parentId);
-        const displayNumber = siblingChapters.length + 1;
-
-        // ID must be globally unique across chapters
-        const existingChapterIds = new Set<string>(getAllChapters().map((c) => c.id));
-        let idCounter = Math.max(1, getAllChapters().length + 1);
-        let newChapterId = `ch-${String(idCounter).padStart(2, '0')}`;
-        while (existingChapterIds.has(newChapterId)) {
-          idCounter += 1;
-          newChapterId = `ch-${String(idCounter).padStart(2, '0')}`;
-        }
-
-        await setChapter({
-          id: newChapterId,
-          title: `Chapter ${String(displayNumber).padStart(2, '0')}: New Chapter`,
-          number: displayNumber,
-          part: parentId,
-          pov: '',
-          theme: '',
-          summary: '',
-          scenes: [],
-          targetWords: 0,
-          currentWords: 0,
-          lastModified: Date.now(),
-        });
-
-        await addChapterToPart(newChapterId, parentId);
-        await saveStructure();
-        buildTree();
       } else if (parentType === 'folder' && parentId.startsWith('ch-')) {
         // Add new Scene to Chapter
         const chapter = getAllChapters().find((c) => c.id === parentId);
@@ -536,14 +511,47 @@ export default function DynamicTreeSidebar({
 
         await addSceneToChapter(newSceneId, parentId);
 
-        // Create an empty document for the scene with a single empty paragraph block
+        // Create an empty document for the scene with embedded outline template
+        const sceneContent = `# Scene ${String(displayNumber).padStart(2, '0')}
+
+## Scene Outline
+**Goal:** TBD
+**Conflict:** TBD
+**Outcome:** TBD
+**Location:** TBD
+**Clock:** TBD
+**Crucible:** TBD
+**POV:** TBD
+
+---
+
+## Scene Content
+*Write your scene here...*`;
+
         await createDocument(`scene/${newSceneId}`, `Scene ${String(displayNumber).padStart(2, '0')}`, [
           {
             id: 'p_001',
             type: 'paragraph',
-            text: '',
+            text: sceneContent,
           },
         ]);
+
+        // Create outline card for the new scene
+        const { setCard } = useOutlineStore.getState();
+        const outlineCard = {
+          id: `outline_${newSceneId}`,
+          sceneId: newSceneId,
+          chapterId: parentId,
+          title: `Scene ${String(displayNumber).padStart(2, '0')} - New Scene`,
+          goal: '',
+          conflict: '',
+          outcome: '',
+          clock: '',
+          crucible: '',
+          requiredBeats: [],
+          lastModified: Date.now(),
+        };
+        await setCard(outlineCard);
 
         await saveStructure();
         buildTree();
@@ -565,7 +573,7 @@ export default function DynamicTreeSidebar({
           return;
         }
 
-        setChapterCard({
+        await setChapterCard({
           id: `outline_${chapterWithoutOutline.id}`,
           chapterId: chapterWithoutOutline.id,
           title: chapterWithoutOutline.title,
@@ -593,16 +601,19 @@ export default function DynamicTreeSidebar({
         await saveStructure();
       } else if (nodeType === 'chapter') {
         await deleteChapter(nodeId);
-        deleteChapterCard(nodeId);
+        await deleteChapterCard(nodeId);
         await saveStructure();
       } else if (nodeType === 'scene') {
         const sceneId = nodeId.replace('scene/', '');
         await deleteScene(sceneId);
-        deleteCard(sceneId);
+        await deleteCard(sceneId);
         await saveStructure();
       } else if (nodeType === 'outline-chapter') {
         const chapterId = nodeId.replace('outline/', '');
-        deleteChapterCard(chapterId);
+        await deleteChapterCard(chapterId);
+      } else if (nodeType === 'outline-scene') {
+        const sceneId = nodeId.replace('outline-scene/', '');
+        await deleteCard(sceneId);
       } else if (nodeType === 'research-document') {
         await deleteDocument(nodeId);
       }
@@ -634,10 +645,10 @@ export default function DynamicTreeSidebar({
         await saveStructure();
       } else if (nodeType === 'outline-chapter') {
         const chapterId = nodeId.replace('outline/', '');
-        renameChapterCard(chapterId, newName);
+        await renameChapterCard(chapterId, newName);
       } else if (nodeType === 'outline-scene') {
-        const sceneId = nodeId.replace('outline/', '');
-        renameCard(sceneId, newName);
+        const sceneId = nodeId.replace('outline-scene/', '');
+        await renameCard(sceneId, newName);
       }
       buildTree();
     } catch (error) {

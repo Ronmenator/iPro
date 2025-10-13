@@ -1,93 +1,70 @@
-import { getLLMClient } from './providers';
-import { useManuscriptStore } from '../store/manuscriptStore';
-import { useOutlineStore } from '../store/outlineStore';
-import { useDocumentStore } from '../store/documentStore';
-import { SceneMetadata } from '../types/manuscript';
+/**
+ * Scene Generator using the new AI provider system
+ * Generates scenes for chapters using AI
+ */
+
+import { getCurrentAIProvider } from './providers';
+import { useBookStore } from '../store/bookStore';
+import { Scene } from '../types/book';
 
 export interface SceneGenerationResult {
   success: boolean;
-  scenes: SceneMetadata[];
+  scenes: Scene[];
   chapterId: string;
   message?: string;
-  error?: string;
 }
 
 /**
  * Generate scenes for a specific chapter using AI
  */
 export async function generateScenesForChapter(chapterId: string): Promise<SceneGenerationResult> {
-  const client = getLLMClient();
-  if (!client) {
-    throw new Error('AI client not configured. Please check your AI settings.');
-  }
-
-  // Get chapter data
-  const getChapter = useManuscriptStore.getState().getChapter;
-  const getScenesByChapter = useManuscriptStore.getState().getScenesByChapter;
-  const getChapterCard = useOutlineStore.getState().getChapterCard;
-  const setScene = useManuscriptStore.getState().setScene;
-  const addSceneToChapter = useManuscriptStore.getState().addSceneToChapter;
-  const saveStructure = useManuscriptStore.getState().saveStructure;
-  const setCard = useOutlineStore.getState().setCard;
-
-  const chapter = getChapter(chapterId);
-  if (!chapter) {
-    throw new Error(`Chapter ${chapterId} not found`);
-  }
-
-  const chapterCard = getChapterCard(chapterId);
-
-  // Get existing scenes for this chapter to determine proper numbering
-  const existingChapterScenes = getScenesByChapter(chapterId);
-  const nextSceneNumber = existingChapterScenes.length + 1;
-  
-  // Generate unique scene IDs (globally unique across all scenes)
-  const existingScenes = useManuscriptStore.getState().getAllScenes();
-  const existingSceneIds = new Set(existingScenes.map(s => s.id));
-  let sceneCounter = Math.max(1, existingScenes.length + 1);
-  
-  const generateSceneId = () => {
-    let sceneId = `scene-${String(sceneCounter).padStart(2, '0')}`;
-    while (existingSceneIds.has(sceneId)) {
-      sceneCounter += 1;
-      sceneId = `scene-${String(sceneCounter).padStart(2, '0')}`;
+  try {
+    const { getChapterById, addScene } = useBookStore.getState();
+    
+    const chapter = getChapterById(chapterId);
+    if (!chapter) {
+      throw new Error(`Chapter ${chapterId} not found`);
     }
-    existingSceneIds.add(sceneId);
-    sceneCounter += 1;
-    return sceneId;
-  };
 
-  // Prepare chapter context for AI
-  const chapterContext = {
-    title: chapter.title,
-    number: chapter.number,
-    summary: chapter.summary || '',
-    pov: chapter.pov || '',
-    theme: chapter.theme || '',
-    goal: chapterCard?.goal || '',
-    conflict: chapterCard?.conflict || '',
-    outcome: chapterCard?.outcome || '',
-    clock: chapterCard?.clock || '',
-    crucible: chapterCard?.crucible || ''
-  };
+    const { book } = useBookStore.getState();
+    if (!book?.settings) {
+      throw new Error('Book settings not found');
+    }
+    
+    const aiProvider = getCurrentAIProvider(book.settings);
+    if (!aiProvider) {
+      throw new Error('AI provider not configured');
+    }
 
-  const scenePrompt = `Generate exactly 3 scenes for this chapter. Each scene should be well-structured and advance the chapter's goals.
+    // Build context for scene generation
+    const chapterContext = {
+      title: chapter.title,
+      summary: chapter.summary,
+      pov: chapter.pov,
+      theme: chapter.theme,
+      goal: chapter.goal,
+      conflict: chapter.conflict,
+      outcome: chapter.outcome,
+    };
 
-Chapter Context:
+    const scenePrompt = `You are an expert fiction writer. Generate 3 scenes for a chapter based on the provided context.
+
+**Chapter Information:**
 - Title: ${chapterContext.title}
-- Summary: ${chapterContext.summary}
-- POV: ${chapterContext.pov}
-- Theme: ${chapterContext.theme}
-- Goal: ${chapterContext.goal}
-- Conflict: ${chapterContext.conflict}
-- Outcome: ${chapterContext.outcome}
-- Clock: ${chapterContext.clock}
-- Crucible: ${chapterContext.crucible}
+- Summary: ${chapterContext.summary || 'Not specified'}
+- POV: ${chapterContext.pov || 'Not specified'}
+- Theme: ${chapterContext.theme || 'Not specified'}
+- Goal: ${chapterContext.goal || 'Not specified'}
+- Conflict: ${chapterContext.conflict || 'Not specified'}
+- Outcome: ${chapterContext.outcome || 'Not specified'}
+
+**Instructions:**
+Generate 3 scenes that work together to fulfill the chapter's goals. Each scene should be distinct and contribute to the overall chapter arc.
 
 Return ONLY a JSON array with this exact structure (ALL fields are required):
 [
   {
-    "pov": "Character name (required)",
+    "title": "Scene title (required)",
     "goal": "What the character wants to achieve (required)",
     "conflict": "What stands in their way (required)",
     "outcome": "What actually happens (required)",
@@ -95,20 +72,24 @@ Return ONLY a JSON array with this exact structure (ALL fields are required):
     "time": "When the scene takes place (required)",
     "clock": "Time pressure or urgency (required)",
     "crucible": "The pressure cooker situation (required)",
-    "summary": "Brief scene summary (required)",
-    "wordsTarget": 1000
+    "pov": "Point of view character (required)",
+    "targetWords": 1000
   }
 ]
 
 Generate 3 scenes that work together to fulfill the chapter's goals. Each scene should be distinct and contribute to the overall chapter arc. Make sure ALL required fields are filled with meaningful content.`;
 
-  try {
-    const response = await client([
-      { role: 'system', content: scenePrompt },
-      { role: 'user', content: 'Generate the 3 scenes for this chapter.' }
-    ]);
+    const response = await aiProvider.generateText({
+      messages: [
+        { role: 'system', content: scenePrompt },
+        { role: 'user', content: 'Generate the 3 scenes for this chapter.' }
+      ],
+      model: 'gpt-4',
+      maxTokens: 2000,
+      temperature: 0.7,
+    });
 
-    const responseText = typeof response === 'string' ? response : response.content || '';
+    const responseText = response.content;
     
     // Extract JSON from response
     const jsonMatch = responseText.match(/\[[\s\S]*\]/);
@@ -121,21 +102,14 @@ Generate 3 scenes that work together to fulfill the chapter's goals. Each scene 
       throw new Error('AI response must contain exactly 3 scenes');
     }
 
-    // Create scene metadata objects
-    const scenes: SceneMetadata[] = [];
-    const createDocument = useDocumentStore.getState().createDocument;
+    // Create and add scenes
+    const createdScenes: Scene[] = [];
     
     for (let i = 0; i < scenesData.length; i++) {
       const sceneData = scenesData[i];
-      const sceneId = generateSceneId();
-      const sceneNumber = nextSceneNumber + i;
       
-      const scene: SceneMetadata = {
-        id: sceneId,
-        chapter: chapterId,
-        title: `Scene ${String(sceneNumber).padStart(2, '0')}`,
-        number: sceneNumber,
-        pov: sceneData.pov || chapterContext.pov || 'Unknown',
+      const scene: Omit<Scene, 'id' | 'number' | 'lastModified'> = {
+        title: sceneData.title || `Scene ${i + 1}`,
         goal: sceneData.goal || 'To be determined',
         conflict: sceneData.conflict || 'Obstacles to overcome',
         outcome: sceneData.outcome || 'Resolution pending',
@@ -143,69 +117,168 @@ Generate 3 scenes that work together to fulfill the chapter's goals. Each scene 
         time: sceneData.time || 'Time to be determined',
         clock: sceneData.clock || 'Time pressure to be determined',
         crucible: sceneData.crucible || 'Pressure situation to be determined',
-        summary: sceneData.summary || 'Scene summary to be written',
-        wordsTarget: sceneData.wordsTarget || 1000,
-        wordsCurrent: 0,
-        lastModified: Date.now()
+        pov: sceneData.pov || chapterContext.pov || 'Unknown',
+        content: '',
+        targetWords: sceneData.targetWords || 1000,
+        currentWords: 0,
+        generatedByAI: true,
+        aiPrompt: scenePrompt,
+        aiModel: 'gpt-4',
       };
 
-      // Save scene to store
-      await setScene(scene);
-      
-      // Add scene to chapter
-      await addSceneToChapter(sceneId, chapterId);
-      
-      // Create an empty document for the scene (following the same pattern as + button)
-      await createDocument(`scene/${sceneId}`, scene.title, [
-        {
-          id: 'p_001',
-          type: 'paragraph',
-          text: '',
-        },
-      ]);
-      
-      // Create outline card for the scene with AI-generated data
-      // The key should be the full document path format (scene/scene-01) to match how OutlinePanel looks it up
-      const sceneDocId = `scene/${sceneId}`;
-      const outlineCard = {
-        id: `outline_${sceneId}`,
-        sceneId: sceneDocId, // Use the full document path format
-        chapterId: chapterId,
-        title: scene.title,
-        goal: scene.goal,
-        conflict: scene.conflict,
-        outcome: scene.outcome,
-        clock: scene.clock,
-        crucible: scene.crucible,
-        requiredBeats: [],
-        lastModified: Date.now()
-      };
-      
-      // Store the card with the full path as the key to match how OutlinePanel looks it up
-      const { cards } = useOutlineStore.getState();
-      cards.set(sceneDocId, outlineCard);
-      useOutlineStore.setState({ cards: new Map(cards) });
-      
-      scenes.push(scene);
+      addScene(chapterId, scene);
+      createdScenes.push(scene as Scene);
     }
-
-    // Save the structure
-    await saveStructure();
 
     return {
       success: true,
-      scenes,
+      scenes: createdScenes,
       chapterId,
-      message: `Successfully generated ${scenes.length} scenes for chapter ${chapter.title}`
+      message: `Successfully generated 3 scenes for chapter "${chapter.title}"`,
     };
 
-  } catch (error) {
-    console.error('Error generating scenes:', error);
+  } catch (error: any) {
+    console.error('Failed to generate scenes:', error);
     return {
       success: false,
       scenes: [],
       chapterId,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
+      message: `Failed to generate scenes: ${error.message}`,
+    };
+  }
+}
+
+/**
+ * Generate a complete book structure from an idea
+ */
+export async function generateBookFromIdea(idea: string, title: string, author: string, genre: string): Promise<{
+  success: boolean;
+  book?: any;
+  message: string;
+}> {
+  try {
+    const { createBook, addChapter, addScene } = useBookStore.getState();
+    
+    const { book } = useBookStore.getState();
+    if (!book?.settings) {
+      throw new Error('Book settings not found');
+    }
+    
+    const aiProvider = getCurrentAIProvider(book.settings);
+    if (!aiProvider) {
+      throw new Error('AI provider not configured');
+    }
+
+    // Create the book
+    createBook(title, author, genre);
+
+    // Generate book structure
+    const structurePrompt = `You are an expert fiction writer. Generate a complete book structure based on the provided idea.
+
+**Book Idea:** ${idea}
+**Title:** ${title}
+**Author:** ${author}
+**Genre:** ${genre}
+
+Generate a book with at least 30 chapters, each with 3 scenes. Return ONLY a JSON object with this structure:
+{
+  "chapters": [
+    {
+      "title": "Chapter title",
+      "summary": "Chapter summary",
+      "pov": "Point of view character",
+      "theme": "Chapter theme",
+      "goal": "Chapter goal",
+      "conflict": "Chapter conflict",
+      "outcome": "Chapter outcome",
+      "scenes": [
+        {
+          "title": "Scene title",
+          "goal": "Scene goal",
+          "conflict": "Scene conflict",
+          "outcome": "Scene outcome",
+          "location": "Scene location",
+          "time": "Scene time",
+          "clock": "Scene clock",
+          "crucible": "Scene crucible",
+          "pov": "Scene POV character"
+        }
+      ]
+    }
+  ]
+}
+
+Generate at least 30 chapters with 3 scenes each. Make sure the story is compelling and follows good story structure.`;
+
+    const response = await aiProvider.generateText({
+      messages: [
+        { role: 'system', content: structurePrompt },
+        { role: 'user', content: 'Generate the complete book structure.' }
+      ],
+      model: 'gpt-4',
+      maxTokens: 4000,
+      temperature: 0.7,
+    });
+
+    const responseText = response.content;
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No valid JSON object found in AI response');
+    }
+
+    const bookData = JSON.parse(jsonMatch[0]);
+    if (!bookData.chapters || !Array.isArray(bookData.chapters)) {
+      throw new Error('Invalid book structure in AI response');
+    }
+
+    // Create chapters and scenes
+    for (const chapterData of bookData.chapters) {
+      const chapter = addChapter({
+        title: chapterData.title,
+        summary: chapterData.summary || '',
+        pov: chapterData.pov || 'Unknown',
+        theme: chapterData.theme || '',
+        goal: chapterData.goal || '',
+        conflict: chapterData.conflict || '',
+        outcome: chapterData.outcome || '',
+        targetWords: 3000,
+        currentWords: 0,
+      });
+
+      // Add scenes to the chapter
+      if (chapterData.scenes && Array.isArray(chapterData.scenes)) {
+        for (const sceneData of chapterData.scenes) {
+          addScene(chapter.id, {
+            title: sceneData.title,
+            goal: sceneData.goal || '',
+            conflict: sceneData.conflict || '',
+            outcome: sceneData.outcome || '',
+            location: sceneData.location || '',
+            time: sceneData.time || '',
+            clock: sceneData.clock || '',
+            crucible: sceneData.crucible || '',
+            pov: sceneData.pov || chapterData.pov || 'Unknown',
+            content: '',
+            targetWords: 1000,
+            currentWords: 0,
+            generatedByAI: true,
+            aiPrompt: structurePrompt,
+            aiModel: 'gpt-4',
+          });
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: `Successfully generated book with ${bookData.chapters.length} chapters`,
+    };
+
+  } catch (error: any) {
+    console.error('Failed to generate book:', error);
+    return {
+      success: false,
+      message: `Failed to generate book: ${error.message}`,
     };
   }
 }

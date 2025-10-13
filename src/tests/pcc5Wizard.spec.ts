@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { validatePcc5, extractJson, splitPcc5ToYaml } from '../types/pcc5';
+import { validatePcc5, extractJson, splitPcc5ToJson } from '../types/pcc5';
 import { generatePcc5, regenerateSection, getWordCountEstimates, deduceStoryProperties } from '../ai/pcc5Wizard';
 
 // Mock the AI client
@@ -203,7 +203,7 @@ describe('PCC-5 Wizard', () => {
     expect(json).toEqual({ outline: { version: "pcc5.v1" } });
   });
 
-  it('should split PCC-5 payload to YAML sections', () => {
+  it('should split PCC-5 payload to JSON sections', () => {
     const payload = {
       outline: { version: "pcc5.v1" as const, step1_promise: { logline: "Test", contract: ["Q1"] }, step2_countdown: { deadline: "Test", stakes: "Test", beats: { setup: "Test", midpoint: "Test", climax: "Test" } }, step3_crucible: { protagonist: { name: "Test", motivation: "Test", limitation: "Test", transformation: "Test" }, antagonist: { name: "Test", leverage: "Test" }, constraints: ["Test"] }, step4_expansion: { acts: { act1: "Test", act2: "Test", act3: "Test" }, escalation_notes: ["Test"] }, step5_fulfillment: { resolutions: {}, success_criteria: ["Test"] } },
       characters: [{ name: "Test", role: "Test", motivation: "Test", conflict: "Test", arc: "Test", relationships: [] }],
@@ -215,7 +215,7 @@ describe('PCC-5 Wizard', () => {
       ]
     };
 
-    const result = splitPcc5ToYaml(payload);
+    const result = splitPcc5ToJson(payload);
     expect(result).toHaveProperty('outline');
     expect(result).toHaveProperty('characters');
     expect(result).toHaveProperty('structure');

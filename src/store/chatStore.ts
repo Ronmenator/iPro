@@ -193,10 +193,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     try {
       // Import AI components dynamically to avoid circular dependencies
-      const { getLLMClient } = await import('../ai/providers');
+      const { getCurrentAIProvider } = await import('../ai/providers');
       const { createAgentTools, getCurrentContext } = await import('../ai/agentTools');
       
-      const llm = getLLMClient();
+      const llm = getCurrentAIProvider();
       if (!llm) {
         const errorMessage: ChatMessage = {
           id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,

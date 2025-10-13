@@ -1,4 +1,4 @@
-import { getLLMClient } from './providers';
+import { getCurrentAIProvider } from './providers';
 import {
   IdeaInput,
   Pcc5Payload,
@@ -129,7 +129,7 @@ Return ONLY valid JSON that matches this exact schema:
  * Generate PCC-5 outline only (Phase 1)
  */
 async function generateOutline(data: IdeaInput): Promise<Outline> {
-  const client = getLLMClient();
+  const client = getCurrentAIProvider();
   if (!client) {
     throw new Error('AI client not configured. Please check your AI settings.');
   }
@@ -167,7 +167,7 @@ async function generateOutline(data: IdeaInput): Promise<Outline> {
  * Generate character roster (Phase 2)
  */
 async function generateCharacters(data: IdeaInput, outline: Outline): Promise<Character[]> {
-  const client = getLLMClient();
+  const client = getCurrentAIProvider();
   if (!client) {
     throw new Error('AI client not configured. Please check your AI settings.');
   }
@@ -204,7 +204,7 @@ async function generateChapterBatch(
   existingChapters: Chapter[] = [],
   batchSize: number = 5
 ): Promise<Chapter[]> {
-  const client = getLLMClient();
+  const client = getCurrentAIProvider();
   if (!client) {
     throw new Error('AI client not configured. Please check your AI settings.');
   }
@@ -255,7 +255,7 @@ async function generateScenesForChapters(
   chapters: Chapter[],
   chapterIds: string[]
 ): Promise<Scene[]> {
-  const client = getLLMClient();
+  const client = getCurrentAIProvider();
   if (!client) {
     throw new Error('AI client not configured. Please check your AI settings.');
   }
@@ -318,7 +318,7 @@ export async function generatePcc5Incremental(
   data: IdeaInput,
   onProgress?: (progress: GenerationProgress) => void
 ): Promise<Pcc5Payload> {
-  const client = getLLMClient();
+  const client = getCurrentAIProvider();
   if (!client) {
     throw new Error('AI client not configured. Please check your AI settings.');
   }
@@ -439,7 +439,7 @@ export async function generatePcc5Incremental(
  * Deduce story properties from idea text
  */
 export async function deduceStoryProperties(idea: string): Promise<Partial<IdeaInput>> {
-  const client = getLLMClient();
+  const client = getCurrentAIProvider();
   if (!client) {
     throw new Error('AI client not configured. Please check your AI settings.');
   }
@@ -515,7 +515,7 @@ export async function regenerateSection(
   context: Partial<Pcc5Payload>,
   originalIdea: IdeaInput
 ): Promise<Pcc5Payload> {
-  const client = getLLMClient();
+  const client = getCurrentAIProvider();
   if (!client) {
     throw new Error('AI client not configured. Please check your AI settings.');
   }

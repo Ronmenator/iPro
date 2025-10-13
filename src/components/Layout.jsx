@@ -11,10 +11,11 @@ import ApplyChangesPanel from './ApplyChangesPanel'
 import LintSidebar from './LintSidebar'
 import FileIOPanel from './FileIOPanel'
 import CommandPalette from './CommandPalette'
-import AISettingsPanel from './AISettingsPanel'
+// AISettingsPanel removed - using new BookSettings component
 import ProjectManagementPanel from './ProjectManagementPanel'
 import WizardPCC5 from './WizardPCC5'
 import OutlinePage from './OutlinePage'
+import AutoSaveIndicator from './AutoSaveIndicator'
 import { useDocumentStore } from '../store/documentStore'
 import { usePendingStore } from '../store/pendingStore'
 import { useOutlineStore } from '../store/outlineStore'
@@ -51,12 +52,13 @@ export default function Layout() {
   const initProjectDB = useProjectStore(state => state.initDB)
   const initManuscriptDB = useManuscriptStore(state => state.initDB)
   const initResearchDB = useResearchStore(state => state.initDB)
+  const initOutlineDB = useOutlineStore(state => state.initDB)
   
   const { toggleTheme } = useTheme()
   
   useEffect(() => {
     const initializeStore = async () => {
-      await Promise.all([initDB(), initProjectDB(), initManuscriptDB(), initResearchDB()])
+      await Promise.all([initDB(), initProjectDB(), initManuscriptDB(), initResearchDB(), initOutlineDB()])
       
       // Check if we need to seed data
       const existingDocs = await getAllDocuments()
@@ -299,7 +301,7 @@ export default function Layout() {
       />
 
       {/* AI Settings Panel */}
-      <AISettingsPanel isOpen={showAISettings} onToggle={() => setShowAISettings(!showAISettings)} />
+      {/* AISettingsPanel removed - using new BookSettings component */}
 
       {/* Project Management Panel */}
       <ProjectManagementPanel isOpen={showProjectManagement} onToggle={() => setShowProjectManagement(!showProjectManagement)} />
@@ -311,6 +313,11 @@ export default function Layout() {
           initialIdea={wizardIdea}
         />
       )}
+
+      {/* Auto-save indicator */}
+      <div className="fixed bottom-4 right-4 z-50">
+        <AutoSaveIndicator />
+      </div>
     </div>
   )
 }

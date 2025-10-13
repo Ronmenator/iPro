@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { getLLMClient } from '../ai/providers'
+import { getCurrentAIProvider } from '../ai/providers'
 import { createAgentTools, getCurrentContext } from '../ai/agentTools'
-import AIActionsPanel from './AIActionsPanel'
+// AIActionsPanel removed - using new AI chat system
 import SceneBatchActionsPanel from './SceneBatchActionsPanel'
 import AIResearchPanel from './AIResearchPanel'
 import ThemeToggle from './ThemeToggle'
@@ -78,7 +78,7 @@ export default function RightSidebar({
 
     try {
       setIsSending(true)
-      const llm = getLLMClient()
+      const llm = getCurrentAIProvider()
       console.log('Got LLM client:', llm)
       if (!llm) {
         throw new Error('AI is not configured. Please configure in AI Settings.')
@@ -307,7 +307,7 @@ Always be helpful and proactive. When generating new content, write it first, th
 
   const handleApplyBatch = async (batch) => {
     try {
-      const llm = getLLMClient()
+      const llm = getCurrentAIProvider()
       if (!llm) {
         throw new Error('AI is not configured')
       }
@@ -479,10 +479,10 @@ Always be helpful and proactive. When generating new content, write it first, th
 
       {/* Content Area */}
       {activeTab === 'ai' ? (
-        <AIActionsPanel 
-          currentDocId={currentDocId}
-          selection={selection}
-        />
+        <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+          <p>AI Actions have been moved to the new AI Chat system.</p>
+          <p className="text-sm mt-2">Use the AI Chat tab in the main interface for text editing assistance.</p>
+        </div>
       ) : activeTab === 'batch' ? (
         <SceneBatchActionsPanel 
           currentDocId={currentDocId}

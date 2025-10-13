@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outline } from '../../types/pcc5';
-import { loadYamlFile, loadPcc5FromYaml } from '../../utils/pcc5FileIO';
+import { loadPcc5FromFiles } from '../../utils/pcc5FileIO';
 
 interface OutlineTabProps {
   data: Outline;
@@ -10,20 +10,27 @@ interface OutlineTabProps {
 }
 
 export default function OutlineTab({ data, onRegenerate, onLoad, isGenerating }: OutlineTabProps) {
-  const handleLoadFromYaml = async () => {
-    try {
-      const yamlContent = await loadYamlFile();
-      if (!yamlContent) return;
+  const handleLoadFromJson = async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
 
-      const pcc5Data = await loadPcc5FromYaml(yamlContent);
-
-      if (onLoad && pcc5Data.outline) {
-        onLoad(pcc5Data.outline);
+      try {
+        const text = await file.text();
+        const jsonData = JSON.parse(text);
+        
+        if (onLoad && jsonData) {
+          onLoad(jsonData);
+        }
+      } catch (error) {
+        console.error('Error loading JSON file:', error);
+        alert(`Failed to load JSON file: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
-    } catch (error) {
-      console.error('Error loading YAML file:', error);
-      alert(`Failed to load YAML file: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    };
+    input.click();
   };
 
   return (
@@ -33,11 +40,11 @@ export default function OutlineTab({ data, onRegenerate, onLoad, isGenerating }:
         <div className="flex gap-2">
           {onLoad && (
             <button
-              onClick={handleLoadFromYaml}
+              onClick={handleLoadFromJson}
               disabled={isGenerating}
               className="px-3 py-1 text-sm font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 rounded-md hover:bg-green-100 dark:hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Load from YAML
+              Load from JSON
             </button>
           )}
           <button

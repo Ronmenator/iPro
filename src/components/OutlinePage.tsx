@@ -2,192 +2,224 @@ import React from 'react';
 import { useOutlineStore } from '../store/outlineStore';
 import { useManuscriptStore } from '../store/manuscriptStore';
 import { useDocumentStore } from '../store/documentStore';
-import { loadYamlFile, loadPcc5FromYaml } from '../utils/pcc5FileIO';
+// JSON import not needed - using native JSON methods
 
 interface OutlinePageProps {
   onOpenWizard: () => void;
 }
 
 export default function OutlinePage({ onOpenWizard }: OutlinePageProps) {
-  const { cards, chapterCards } = useOutlineStore();
+  const { cards, chapterCards, clearAllCards } = useOutlineStore();
   const { getAllChapters, getAllScenes } = useManuscriptStore();
 
   const chapters = getAllChapters();
   const scenes = getAllScenes();
 
-  const handleLoadFromYaml = async () => {
-    try {
-      console.log('=== YAML LOAD START ===');
-      console.log('Starting YAML file load...');
-      
-      const yamlContent = await loadYamlFile();
-      console.log('YAML content loaded, length:', yamlContent?.length);
-      
-      if (!yamlContent) {
-        console.log('No YAML content received - user likely cancelled');
-        return;
-      }
+  const handleLoadFromJson = async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
 
-      console.log('Parsing YAML content...');
-      const pcc5Data = await loadPcc5FromYaml(yamlContent);
-      console.log('YAML parsed successfully', pcc5Data);
-      console.log('=== YAML LOAD COMPLETE ===');
-
-      // Update outline store with loaded outline data
-      if (pcc5Data.outline && Object.keys(pcc5Data.outline).length > 0) {
-        // Convert outline to card for the outline store
-        const outlineCard = {
-          id: 'outline-1',
-          sceneId: 'outline-1',
-          type: 'outline' as const,
-          title: 'PCC-5 Outline',
-          content: pcc5Data.outline,
-          goal: '',
-          conflict: '',
-          outcome: '',
-          clock: '',
-          crucible: '',
-          requiredBeats: [],
-          lastModified: Date.now()
-        };
-
-        useOutlineStore.getState().setCard(outlineCard);
-      }
-
-      // Integrate chapters and scenes into manuscript store
-      if (pcc5Data.chapters.length > 0 || pcc5Data.scenes.length > 0) {
-        console.log('Integrating chapters and scenes into manuscript store...');
+      try {
+        console.log('=== JSON LOADER ===');
         
-        // Create a default part if none exists
+        // Read and parse JSON file
+        const text = await file.text();
+        const jsonData = JSON.parse(text);
+        
+        if (!jsonData) {
+          throw new Error('Invalid JSON format or empty file.');
+        }
+
+        console.log('JSON data loaded:', jsonData);
+
+        // Get manuscript store and clear existing data before loading new book
         const manuscriptStore = useManuscriptStore.getState();
-        const existingParts = manuscriptStore.getAllParts();
-        let defaultPartId = 'part-01';
+        console.log('Clearing existing manuscript data...');
+        await manuscriptStore.clearAllChapters();
+        await manuscriptStore.clearAllScenes();
         
-        if (existingParts.length === 0) {
-          // Create a default part
-          const defaultPart = {
-            id: 'part-01',
-            title: 'Part I',
-            number: 1,
-            summary: 'The main story',
-            chapters: [],
-            lastModified: Date.now()
-          };
-          await manuscriptStore.setPart(defaultPart);
-          
-          // Add to partOrder (following the same pattern as + button)
-          const { partOrder } = manuscriptStore;
-          const newPartOrder = [...partOrder, 'part-01'];
-          useManuscriptStore.setState({ partOrder: newPartOrder });
-        } else {
-          defaultPartId = existingParts[0].id;
-        }
+        // Clear outline cards as well
+        const outlineStore = useOutlineStore.getState();
+        await outlineStore.clearAllCards();
 
-        // Convert and store chapters
-        let chapterCounter = 1;
-        for (const pcc5Chapter of pcc5Data.chapters) {
-          const chapterNumber = parseInt(pcc5Chapter.id.replace('ch-', '')) || chapterCounter;
-          const chapterMetadata = {
-            id: pcc5Chapter.id,
-            part: defaultPartId,
-            title: `Chapter ${String(chapterNumber).padStart(2, '0')}: ${pcc5Chapter.title}`,
-            number: chapterNumber,
-            pov: pcc5Chapter.pov,
-            summary: pcc5Chapter.summary,
-            lastModified: Date.now(),
-            scenes: [] // Will be populated when we process scenes
-          };
-          chapterCounter++;
-          
-          await manuscriptStore.setChapter(chapterMetadata);
-          
-          // Add chapter to part (following the same pattern as + button)
-          await manuscriptStore.addChapterToPart(pcc5Chapter.id, defaultPartId);
-          console.log('Stored chapter:', pcc5Chapter.id);
-        }
-
-        // Convert and store scenes
-        // Group scenes by chapter to get proper scene numbering within each chapter
-        const scenesByChapter = new Map<string, any[]>();
-        for (const pcc5Scene of pcc5Data.scenes) {
-          if (!scenesByChapter.has(pcc5Scene.chapter)) {
-            scenesByChapter.set(pcc5Scene.chapter, []);
+        // Get current manuscript state (should be empty now)
+        const existingChapters = manuscriptStore.getAllChapters();
+        
+        // Find the highest chapter number
+        let maxChapterNumber = 0;
+        for (const chapter of existingChapters.values()) {
+          if (chapter.number && chapter.number > maxChapterNumber) {
+            maxChapterNumber = chapter.number;
           }
-          scenesByChapter.get(pcc5Scene.chapter)!.push(pcc5Scene);
         }
+        const nextChapterNumber = maxChapterNumber + 1;
+        
+        // Process chapters
+        const newChapterIds: string[] = [];
+        let chapterCounter = nextChapterNumber;
+        
+        if (jsonData.chapters && Array.isArray(jsonData.chapters)) {
+          console.log(`Processing ${jsonData.chapters.length} chapters...`);
+          
+          for (const jsonChapter of jsonData.chapters) {
+            if (!jsonChapter.id || !jsonChapter.title) {
+              console.warn('Skipping chapter without ID or title:', jsonChapter);
+              continue;
+            }
 
-        for (const [chapterId, chapterScenes] of scenesByChapter) {
-          let sceneCounter = 1;
-          for (const pcc5Scene of chapterScenes) {
-            const sceneMetadata = {
-              id: pcc5Scene.id,
-              chapter: pcc5Scene.chapter,
-              title: `Scene ${String(sceneCounter).padStart(2, '0')}`,
-              location: pcc5Scene.location,
-              pov: pcc5Scene.pov,
-              goal: pcc5Scene.goal,
-              conflict: pcc5Scene.conflict,
-              outcome: pcc5Scene.outcome,
-              clock: pcc5Scene.clock,
-              crucible: pcc5Scene.crucible,
-              wordsTarget: pcc5Scene.words_target,
-              wordsCurrent: 0,
-              lastModified: Date.now()
-            };
-            sceneCounter++;
+            // Generate unique chapter ID
+            const newChapterId = `ch-${String(chapterCounter).padStart(2, '0')}`;
+            newChapterIds.push(newChapterId);
             
-            await manuscriptStore.setScene(sceneMetadata);
-            
-            // Add scene to chapter
-            await manuscriptStore.addSceneToChapter(pcc5Scene.id, pcc5Scene.chapter);
-            
-            // Create an empty document for the scene (following the same pattern as + button)
-            const { createDocument } = useDocumentStore.getState();
-            await createDocument(`scene/${pcc5Scene.id}`, sceneMetadata.title, [
-              {
-                id: 'p_001',
-                type: 'paragraph',
-                text: '',
-              },
-            ]);
-            
-            // Create outline card for the scene with YAML data
-            const { setCard } = useOutlineStore.getState();
-            const outlineCard = {
-              id: `outline_${pcc5Scene.id}`,
-              sceneId: `scene/${pcc5Scene.id}`,
-              chapterId: pcc5Scene.chapter,
-              title: sceneMetadata.title,
-              goal: pcc5Scene.goal || '',
-              conflict: pcc5Scene.conflict || '',
-              outcome: pcc5Scene.outcome || '',
-              clock: pcc5Scene.clock || '',
-              crucible: pcc5Scene.crucible || '',
-              requiredBeats: [],
+            // Create chapter metadata
+            const chapterMetadata = {
+              id: newChapterId,
+              title: `Chapter ${String(chapterCounter).padStart(2, '0')}: ${jsonChapter.title}`,
+              number: chapterCounter,
+              pov: jsonChapter.pov || '',
+              summary: jsonChapter.summary || '',
               lastModified: Date.now(),
+              scenes: []
             };
-            setCard(outlineCard);
             
-            console.log('Stored scene:', pcc5Scene.id, 'in chapter:', pcc5Scene.chapter);
+            // Store chapter
+            await manuscriptStore.setChapter(chapterMetadata);
+            console.log(`Created chapter: ${newChapterId} - ${jsonChapter.title}`);
+            
+            chapterCounter++;
           }
         }
 
-        // Save structure (following the same pattern as + button)
+        // Process scenes
+        let totalScenesCreated = 0;
+        
+        if (jsonData.scenes && Array.isArray(jsonData.scenes)) {
+          console.log(`Processing ${jsonData.scenes.length} scenes...`);
+          
+          // Group scenes by their original chapter ID
+          const scenesByOriginalChapter = new Map<string, any[]>();
+          for (const jsonScene of jsonData.scenes) {
+            if (!jsonScene.id || !jsonScene.chapter) {
+              console.warn('Skipping scene without ID or chapter:', jsonScene);
+              continue;
+            }
+            
+            if (!scenesByOriginalChapter.has(jsonScene.chapter)) {
+              scenesByOriginalChapter.set(jsonScene.chapter, []);
+            }
+            scenesByOriginalChapter.get(jsonScene.chapter)!.push(jsonScene);
+          }
+
+          // Map original chapter IDs to new chapter IDs
+          const chapterIdMapping = new Map<string, string>();
+          if (jsonData.chapters && Array.isArray(jsonData.chapters)) {
+            jsonData.chapters.forEach((jsonChapter: any, index: number) => {
+              if (jsonChapter.id && newChapterIds[index]) {
+                chapterIdMapping.set(jsonChapter.id, newChapterIds[index]);
+              }
+            });
+          }
+
+          // Process scenes for each chapter
+          for (const [originalChapterId, chapterScenes] of scenesByOriginalChapter) {
+            const newChapterId = chapterIdMapping.get(originalChapterId);
+            if (!newChapterId) {
+              console.warn(`No mapping found for chapter ${originalChapterId}, skipping ${chapterScenes.length} scenes`);
+              continue;
+            }
+
+            // Verify chapter exists
+            const chapter = manuscriptStore.getChapter(newChapterId);
+            if (!chapter) {
+              console.warn(`Chapter ${newChapterId} not found, skipping ${chapterScenes.length} scenes`);
+              continue;
+            }
+
+            // Process scenes in this chapter
+            let sceneCounter = 1;
+            for (const jsonScene of chapterScenes) {
+              // Generate unique scene ID
+              const newSceneId = `${newChapterId}-scene-${String(sceneCounter).padStart(2, '0')}`;
+              
+              // Create scene metadata
+              const sceneMetadata = {
+                id: newSceneId,
+                chapter: newChapterId,
+                title: `Scene ${String(sceneCounter).padStart(2, '0')}`,
+                location: jsonScene.location || '',
+                pov: jsonScene.pov || '',
+                goal: jsonScene.goal || '',
+                conflict: jsonScene.conflict || '',
+                disaster: jsonScene.disaster || '',
+                reaction: jsonScene.reaction || '',
+                dilemma: jsonScene.dilemma || '',
+                decision: jsonScene.decision || '',
+                lastModified: Date.now()
+              };
+
+              // Store scene
+              await manuscriptStore.setScene(sceneMetadata);
+              
+              // Add scene to chapter
+              await manuscriptStore.addSceneToChapter(newSceneId, newChapterId);
+              
+              // Create document for scene with embedded outline details
+              const { createDocument } = useDocumentStore.getState();
+              const sceneContent = `# ${sceneMetadata.title}
+
+## Scene Outline
+**Goal:** ${jsonScene.goal || 'TBD'}
+**Conflict:** ${jsonScene.conflict || 'TBD'}
+**Outcome:** ${jsonScene.outcome || 'TBD'}
+**Location:** ${jsonScene.location || 'TBD'}
+**Clock:** ${jsonScene.clock || 'TBD'}
+**Crucible:** ${jsonScene.crucible || 'TBD'}
+**POV:** ${jsonScene.pov || 'TBD'}
+
+---
+
+## Scene Content
+*Write your scene here...*`;
+
+              await createDocument(`scene/${newSceneId}`, sceneMetadata.title, [
+                {
+                  id: 'p_001',
+                  type: 'paragraph',
+                  text: sceneContent,
+                },
+              ]);
+              
+              console.log(`Created scene: ${newSceneId} in chapter ${newChapterId}`);
+              totalScenesCreated++;
+              sceneCounter++;
+            }
+          }
+        }
+
+        // Update chapter order (replace with new chapters only)
+        if (newChapterIds.length > 0) {
+          useManuscriptStore.setState({ chapterOrder: newChapterIds });
+        }
+
+        // Save structure
         await manuscriptStore.saveStructure();
-        console.log('Integration complete!');
-      }
 
-      // Show success message
-      if (pcc5Data.chapters.length > 0 || pcc5Data.scenes.length > 0) {
-        alert(`Successfully loaded YAML file!\n\n📋 Outline: ${Object.keys(pcc5Data.outline).length} sections\n👥 Characters: ${pcc5Data.characters.length}\n📖 Chapters: ${pcc5Data.chapters.length}\n🎬 Scenes: ${pcc5Data.scenes.length}\n\nAll data has been integrated into the manuscript structure!`);
-      } else {
-        alert(`Successfully loaded YAML file!\n\n📋 Outline: ${Object.keys(pcc5Data.outline).length} sections\n👥 Characters: ${pcc5Data.characters.length}\n\nOutline data has been loaded into the outline store.`);
-      }
+        // Show success message
+        const chapterCount = newChapterIds.length;
+        alert(`✅ Successfully loaded new book!\n🧹 Cleared existing data\n📚 Created ${chapterCount} chapters\n🎬 Created ${totalScenesCreated} scenes`);
 
-    } catch (error) {
-      console.error('Error loading YAML file:', error);
-      alert(`Failed to load YAML file: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+        console.log('=== JSON LOADER COMPLETE ===');
+
+      } catch (error) {
+        console.error('Failed to load JSON file:', error);
+        alert(`Failed to load JSON file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    };
+    input.click();
   };
 
   return (
@@ -203,13 +235,13 @@ export default function OutlinePage({ onOpenWizard }: OutlinePageProps) {
           </div>
           <div className="flex gap-3">
             <button
-              onClick={handleLoadFromYaml}
+              onClick={handleLoadFromJson}
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors flex items-center space-x-2"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
-              <span>Load from YAML</span>
+              <span>Load from JSON</span>
             </button>
             <button
               onClick={onOpenWizard}

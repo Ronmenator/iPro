@@ -1,13 +1,10 @@
-import { Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from './context/ThemeContext'
-import Layout from './components/Layout'
+import BookEditor from './components/BookEditor'
 
 function App() {
   return (
     <ThemeProvider>
-      <Routes>
-        <Route path="/*" element={<Layout />} />
-      </Routes>
+      <BookEditor />
     </ThemeProvider>
   )
 }

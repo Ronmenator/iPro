@@ -12,228 +12,66 @@ import { documentToMarkdown, markdownToDocument } from './fileIO';
  */
 
 /**
- * Convert scene metadata to YAML format
+ * Convert scene metadata to JSON format
  */
-export function sceneMetadataToYAML(meta: SceneMetadata): string {
-  const lines: string[] = [
-    `id: ${meta.id}`,
-    `chapter: ${meta.chapter}`,
-    `title: ${meta.title}`,
-  ];
-  
-  if (meta.location) lines.push(`location: ${meta.location}`);
-  if (meta.time) lines.push(`time: ${meta.time}`);
-  if (meta.pov) lines.push(`pov: ${meta.pov}`);
-  
-  lines.push('');
-  lines.push('# Story Structure');
-  if (meta.goal) lines.push(`goal: ${meta.goal}`);
-  if (meta.conflict) lines.push(`conflict: ${meta.conflict}`);
-  if (meta.outcome) lines.push(`outcome: ${meta.outcome}`);
-  if (meta.clock) lines.push(`clock: ${meta.clock}`);
-  if (meta.crucible) lines.push(`crucible: ${meta.crucible}`);
-  
-  lines.push('');
-  lines.push('# Word Count');
-  if (meta.wordsTarget) lines.push(`words_target: ${meta.wordsTarget}`);
-  if (meta.wordsCurrent) lines.push(`words_current: ${meta.wordsCurrent}`);
-  
-  lines.push('');
-  lines.push(`last_modified: ${meta.lastModified}`);
-  
-  if (meta.notes) {
-    lines.push('');
-    lines.push('# Notes');
-    lines.push(`notes: ${meta.notes}`);
+export function sceneMetadataToJSON(meta: SceneMetadata): string {
+  return JSON.stringify(meta, null, 2);
+}
+
+/**
+ * Parse JSON to scene metadata
+ */
+export function jsonToSceneMetadata(json: string): Partial<SceneMetadata> {
+  try {
+    return JSON.parse(json);
+  } catch (error) {
+    console.error('Failed to parse scene metadata JSON:', error);
+    return {};
   }
-  
-  return lines.join('\n');
 }
 
 /**
- * Parse YAML to scene metadata
+ * Convert chapter metadata to JSON format
  */
-export function yamlToSceneMetadata(yaml: string): Partial<SceneMetadata> {
-  const lines = yaml.split('\n');
-  const meta: any = {};
-  
-  for (const line of lines) {
-    if (line.startsWith('#') || !line.trim()) continue;
-    
-    const match = line.match(/^(\w+):\s*(.+)$/);
-    if (match) {
-      const [, key, value] = match;
-      
-      // Convert snake_case to camelCase
-      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-      
-      // Parse numbers
-      if (key.includes('words') || key.includes('modified')) {
-        meta[camelKey] = parseInt(value);
-      } else {
-        meta[camelKey] = value;
-      }
-    }
+export function chapterMetadataToJSON(meta: ChapterMetadata): string {
+  return JSON.stringify(meta, null, 2);
+}
+
+/**
+ * Parse JSON to chapter metadata
+ */
+export function jsonToChapterMetadata(json: string): Partial<ChapterMetadata> {
+  try {
+    return JSON.parse(json);
+  } catch (error) {
+    console.error('Failed to parse chapter metadata JSON:', error);
+    return {};
   }
-  
-  return meta;
 }
 
 /**
- * Convert chapter metadata to YAML format
+ * Convert part metadata to JSON format
  */
-export function chapterMetadataToYAML(meta: ChapterMetadata): string {
-  const lines: string[] = [
-    `id: ${meta.id}`,
-    `title: ${meta.title}`,
-    `number: ${meta.number}`,
-  ];
-  
-  if (meta.part) lines.push(`part: ${meta.part}`);
-  if (meta.pov) lines.push(`pov: ${meta.pov}`);
-  if (meta.theme) lines.push(`theme: ${meta.theme}`);
-  
-  if (meta.summary) {
-    lines.push('');
-    lines.push('# Summary');
-    lines.push(`summary: ${meta.summary}`);
+export function partMetadataToJSON(meta: PartMetadata): string {
+  return JSON.stringify(meta, null, 2);
+}
+
+/**
+ * Parse JSON to part metadata
+ */
+export function jsonToPartMetadata(json: string): Partial<PartMetadata> {
+  try {
+    return JSON.parse(json);
+  } catch (error) {
+    console.error('Failed to parse part metadata JSON:', error);
+    return {};
   }
-  
-  lines.push('');
-  lines.push('# Scenes');
-  lines.push('scenes:');
-  meta.scenes.forEach(sceneId => {
-    lines.push(`  - ${sceneId}`);
-  });
-  
-  lines.push('');
-  lines.push('# Word Count');
-  if (meta.targetWords) lines.push(`target_words: ${meta.targetWords}`);
-  if (meta.currentWords) lines.push(`current_words: ${meta.currentWords}`);
-  
-  lines.push('');
-  lines.push(`last_modified: ${meta.lastModified}`);
-  
-  if (meta.notes) {
-    lines.push('');
-    lines.push('# Notes');
-    lines.push(`notes: ${meta.notes}`);
-  }
-  
-  return lines.join('\n');
 }
 
 /**
- * Parse YAML to chapter metadata
+ * Export manuscript structure to files
  */
-export function yamlToChapterMetadata(yaml: string): Partial<ChapterMetadata> {
-  const lines = yaml.split('\n');
-  const meta: any = { scenes: [] };
-  let inScenesSection = false;
-  
-  for (const line of lines) {
-    if (line.startsWith('#')) {
-      inScenesSection = false;
-      continue;
-    }
-    if (!line.trim()) continue;
-    
-    if (line === 'scenes:') {
-      inScenesSection = true;
-      continue;
-    }
-    
-    if (inScenesSection && line.trim().startsWith('- ')) {
-      meta.scenes.push(line.trim().substring(2));
-      continue;
-    }
-    
-    const match = line.match(/^(\w+):\s*(.+)$/);
-    if (match) {
-      const [, key, value] = match;
-      
-      // Convert snake_case to camelCase
-      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-      
-      // Parse numbers
-      if (key === 'number' || key.includes('words') || key.includes('modified')) {
-        meta[camelKey] = parseInt(value);
-      } else {
-        meta[camelKey] = value;
-      }
-    }
-  }
-  
-  return meta;
-}
-
-/**
- * Convert part metadata to YAML format
- */
-export function partMetadataToYAML(meta: PartMetadata): string {
-  const lines: string[] = [
-    `id: ${meta.id}`,
-    `title: ${meta.title}`,
-    `number: ${meta.number}`,
-  ];
-  
-  if (meta.summary) {
-    lines.push('');
-    lines.push('# Summary');
-    lines.push(`summary: ${meta.summary}`);
-  }
-  
-  lines.push('');
-  lines.push('# Chapters');
-  lines.push('chapters:');
-  meta.chapters.forEach(chapterId => {
-    lines.push(`  - ${chapterId}`);
-  });
-  
-  lines.push('');
-  lines.push(`last_modified: ${meta.lastModified}`);
-  
-  return lines.join('\n');
-}
-
-/**
- * Get file path for a scene markdown file
- */
-export function getSceneMarkdownPath(sceneId: string, chapterId: string, partId: string = 'part-01'): string {
-  return MANUSCRIPT_PATHS.sceneMarkdown(partId, chapterId, sceneId);
-}
-
-/**
- * Get file path for a scene metadata file
- */
-export function getSceneMetadataPath(sceneId: string, chapterId: string, partId: string = 'part-01'): string {
-  return MANUSCRIPT_PATHS.sceneMetadata(partId, chapterId, sceneId);
-}
-
-/**
- * Get file path for a chapter metadata file
- */
-export function getChapterMetadataPath(chapterId: string, partId: string = 'part-01'): string {
-  return MANUSCRIPT_PATHS.chapterMetadata(partId, chapterId);
-}
-
-/**
- * Get file path for a part metadata file
- */
-export function getPartMetadataPath(partId: string): string {
-  return MANUSCRIPT_PATHS.partMetadata(partId);
-}
-
-/**
- * Export manuscript structure to file map
- */
-export interface ManuscriptExport {
-  parts: Map<string, PartMetadata>;
-  chapters: Map<string, ChapterMetadata>;
-  scenes: Map<string, { metadata: SceneMetadata; document: Document }>;
-}
-
-export function exportManuscript(
+export function exportManuscriptStructure(
   parts: Map<string, PartMetadata>,
   chapters: Map<string, ChapterMetadata>,
   scenes: Map<string, SceneMetadata>,
@@ -242,135 +80,155 @@ export function exportManuscript(
   const files = new Map<string, string>();
   
   // Export parts
-  parts.forEach(part => {
-    const path = getPartMetadataPath(part.id);
-    const content = partMetadataToYAML(part);
-    files.set(path, content);
-  });
+  for (const [partId, part] of parts) {
+    const content = partMetadataToJSON(part);
+    files.set(`manuscript/${partId}/${partId}.meta.json`, content);
+  }
   
   // Export chapters
-  chapters.forEach(chapter => {
-    const partId = chapter.part || 'part-01';
-    const path = getChapterMetadataPath(chapter.id, partId);
-    const content = chapterMetadataToYAML(chapter);
-    files.set(path, content);
-  });
+  for (const [chapterId, chapter] of chapters) {
+    const content = chapterMetadataToJSON(chapter);
+    files.set(`manuscript/${chapter.part}/${chapterId}/${chapterId}.meta.json`, content);
+  }
   
   // Export scenes
-  scenes.forEach(scene => {
-    const chapter = chapters.get(scene.chapter);
-    if (!chapter) return;
+  for (const [sceneId, scene] of scenes) {
+    const metaContent = sceneMetadataToJSON(scene);
+    files.set(`manuscript/${scene.part}/${scene.chapter}/${sceneId}.meta.json`, metaContent);
     
-    const partId = chapter.part || 'part-01';
-    
-    // Export scene metadata
-    const metaPath = getSceneMetadataPath(scene.id, scene.chapter, partId);
-    const metaContent = sceneMetadataToYAML(scene);
-    files.set(metaPath, metaContent);
-    
-    // Export scene document
-    const docId = `scene/${scene.id}`;
-    const doc = documents.get(docId);
+    // Export scene document if it exists
+    const doc = documents.get(`scene/${sceneId}`);
     if (doc) {
-      const mdPath = getSceneMarkdownPath(scene.id, scene.chapter, partId);
-      const mdContent = documentToMarkdown(doc);
-      files.set(mdPath, mdContent);
+      const docContent = documentToMarkdown(doc);
+      files.set(`manuscript/${scene.part}/${scene.chapter}/${sceneId}.md`, docContent);
     }
-  });
-  
-  // Add project manifest
-  const manifest = {
-    type: 'monday-manuscript',
-    version: '1.0.0',
-    exportDate: new Date().toISOString(),
-    structure: {
-      parts: parts.size,
-      chapters: chapters.size,
-      scenes: scenes.size,
-    },
-  };
-  files.set('manuscript.json', JSON.stringify(manifest, null, 2));
+  }
   
   return files;
 }
 
 /**
- * Import manuscript structure from file map
+ * Import manuscript structure from files
  */
-export function importManuscript(files: Map<string, string>): ManuscriptExport {
+export async function importManuscriptStructure(
+  files: Map<string, string>
+): Promise<{
+  parts: Map<string, PartMetadata>;
+  chapters: Map<string, ChapterMetadata>;
+  scenes: Map<string, SceneMetadata>;
+  documents: Map<string, Document>;
+}> {
   const parts = new Map<string, PartMetadata>();
   const chapters = new Map<string, ChapterMetadata>();
-  const scenes = new Map<string, { metadata: SceneMetadata; document: Document }>();
+  const scenes = new Map<string, SceneMetadata>();
+  const documents = new Map<string, Document>();
   
-  // Process all files
-  files.forEach((content, filePath) => {
-    // Part metadata
-    if (filePath.match(/manuscript\/part-\d+\/part-\d+\.meta\.yml$/)) {
+  for (const [filePath, content] of files) {
+    try {
       // Parse part metadata
-      const lines = content.split('\n');
-      const partMeta: any = { chapters: [] };
-      let inChaptersSection = false;
-      
-      for (const line of lines) {
-        if (line === 'chapters:') {
-          inChaptersSection = true;
-          continue;
-        }
-        if (inChaptersSection && line.trim().startsWith('- ')) {
-          partMeta.chapters.push(line.trim().substring(2));
-          continue;
-        }
-        const match = line.match(/^(\w+):\s*(.+)$/);
-        if (match) {
-          const [, key, value] = match;
-          partMeta[key] = key === 'number' || key === 'last_modified' ? parseInt(value) : value;
+      if (filePath.match(/manuscript\/part-\d+\/part-\d+\.meta\.json$/)) {
+        const partMeta = jsonToPartMetadata(content);
+        if (partMeta.id) {
+          parts.set(partMeta.id, partMeta as PartMetadata);
         }
       }
-      
-      if (partMeta.id) {
-        parts.set(partMeta.id, partMeta as PartMetadata);
-      }
-    }
-    
-    // Chapter metadata
-    else if (filePath.match(/manuscript\/part-\d+\/ch-\d+\/ch-\d+\.meta\.yml$/)) {
-      const chapterMeta = yamlToChapterMetadata(content);
-      if (chapterMeta.id) {
-        chapters.set(chapterMeta.id, chapterMeta as ChapterMetadata);
-      }
-    }
-    
-    // Scene metadata
-    else if (filePath.match(/manuscript\/.*\/scene-\d+\.meta\.yml$/)) {
-      const sceneMeta = yamlToSceneMetadata(content);
-      if (sceneMeta.id) {
-        scenes.set(sceneMeta.id, { 
-          metadata: sceneMeta as SceneMetadata, 
-          document: null as any 
-        });
-      }
-    }
-    
-    // Scene markdown
-    else if (filePath.match(/manuscript\/.*\/scene-\d+\.md$/)) {
-      const match = filePath.match(/scene-(\d+)\.md$/);
-      if (match) {
-        const sceneId = `scene-${match[1]}`;
-        const docId = `scene/${sceneId}`;
-        const doc = markdownToDocument(content, docId);
-        
-        if (scenes.has(sceneId)) {
-          scenes.get(sceneId)!.document = doc as Document;
-        } else {
-          scenes.set(sceneId, {
-            metadata: { id: sceneId } as SceneMetadata,
-            document: doc as Document,
-          });
+      // Parse chapter metadata
+      else if (filePath.match(/manuscript\/part-\d+\/ch-\d+\/ch-\d+\.meta\.json$/)) {
+        const chapterMeta = jsonToChapterMetadata(content);
+        if (chapterMeta.id) {
+          chapters.set(chapterMeta.id, chapterMeta as ChapterMetadata);
         }
       }
+      // Parse scene metadata
+      else if (filePath.match(/manuscript\/.*\/scene-\d+\.meta\.json$/)) {
+        const sceneMeta = jsonToSceneMetadata(content);
+        if (sceneMeta.id) {
+          scenes.set(sceneMeta.id, sceneMeta as SceneMetadata);
+        }
+      }
+      // Parse scene documents
+      else if (filePath.match(/manuscript\/.*\/scene-\d+\.md$/)) {
+        const doc = markdownToDocument(content, filePath);
+        if (doc.id) {
+          documents.set(doc.id, doc as Document);
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to parse file ${filePath}:`, error);
     }
-  });
+  }
   
-  return { parts, chapters, scenes };
+  return { parts, chapters, scenes, documents };
 }
 
+/**
+ * Export manuscript to files
+ */
+export function exportManuscript(
+  parts: Map<string, PartMetadata>,
+  chapters: Map<string, ChapterMetadata>,
+  scenes: Map<string, SceneMetadata>,
+  documents: Map<string, Document>
+): Map<string, string> {
+  return exportManuscriptStructure(parts, chapters, scenes, documents);
+}
+
+/**
+ * Import manuscript from files
+ */
+export async function importManuscript(
+  files: Map<string, string>
+): Promise<{
+  parts: Map<string, PartMetadata>;
+  chapters: Map<string, ChapterMetadata>;
+  scenes: Map<string, SceneMetadata>;
+  documents: Map<string, Document>;
+}> {
+  return importManuscriptStructure(files);
+}
+
+/**
+ * Export project files
+ */
+export function exportProjectFiles(
+  documents: Document[],
+  projectName: string = 'MyBook'
+): Map<string, string> {
+  const files = new Map<string, string>();
+  
+  // Create project structure
+  files.set('README.md', `# ${projectName}\n\nThis is a generated manuscript project.`);
+  
+  // Export all documents
+  for (const doc of documents) {
+    const content = documentToMarkdown(doc);
+    const filePath = getDocumentFilePath(doc.id);
+    files.set(filePath, content);
+  }
+  
+  return files;
+}
+
+/**
+ * Get document file path
+ */
+function getDocumentFilePath(docId: string): string {
+  if (docId.startsWith('scene/')) {
+    const sceneId = docId.replace('scene/', '');
+    return `scenes/${sceneId}.md`;
+  } else if (docId.startsWith('chapter/')) {
+    const chapterId = docId.replace('chapter/', '');
+    return `chapters/${chapterId}.md`;
+  } else {
+    return `documents/${docId}.md`;
+  }
+}
+
+/**
+ * Manuscript export interface
+ */
+export interface ManuscriptExport {
+  parts: Map<string, PartMetadata>;
+  chapters: Map<string, ChapterMetadata>;
+  scenes: Map<string, { metadata: SceneMetadata; document: Document }>;
+}

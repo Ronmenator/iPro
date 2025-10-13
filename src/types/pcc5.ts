@@ -261,8 +261,8 @@ export function validateScenes(data: unknown): Scene[] {
   }
 }
 
-// Helper function to split PCC-5 payload into separate YAML sections
-export function splitPcc5ToYaml(payload: Pcc5Payload) {
+// Helper function to split PCC-5 payload into separate JSON sections
+export function splitPcc5ToJson(payload: Pcc5Payload) {
   return {
     outline: payload.outline,
     characters: payload.characters,
