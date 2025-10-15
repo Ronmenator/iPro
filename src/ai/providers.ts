@@ -4,6 +4,7 @@
  */
 
 import { BookSettings } from '../types/book';
+import { AzureOpenAI } from 'openai';
 
 export interface AIProvider {
   name: string;
@@ -262,10 +263,25 @@ export class OpenAIProvider implements AIProviderInterface {
  * Azure OpenAI Provider
  */
 export class AzureOpenAIProvider implements AIProviderInterface {
+  private client: AzureOpenAI | null = null;
+
+  private getClient(settings: BookSettings): AzureOpenAI {
+    if (!this.client) {
+      this.client = new AzureOpenAI({
+        endpoint: settings.azureEndpoint,
+        apiKey: settings.aiApiKey,
+        apiVersion: settings.azureApiVersion || '2024-10-21',
+        deployment: settings.azureDeploymentName,
+        dangerouslyAllowBrowser: true, // Safe for Electron apps running locally
+      });
+    }
+    return this.client;
+  }
+
   getProvider(): AIProvider {
     return {
       name: 'Azure OpenAI',
-      models: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+      models: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo', 'gpt-5-chat', 'gpt-5-mini'],
       maxTokens: 16384,
       supportsStreaming: true,
       supportsTools: true,
@@ -273,143 +289,112 @@ export class AzureOpenAIProvider implements AIProviderInterface {
   }
 
   async generateText(request: AIRequest, settings: BookSettings): Promise<AIResponse> {
-    const endpoint = `${settings.azureEndpoint}/openai/deployments/${settings.azureDeploymentName}/chat/completions?api-version=${settings.azureApiVersion || '2024-02-15-preview'}`;
+    const client = this.getClient(settings);
     
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-key': settings.aiApiKey,
-      },
-      body: JSON.stringify({
-        model: settings.azureDeploymentName, // Use deployment name as model for Azure
-        messages: request.messages,
-        max_tokens: request.maxTokens || settings.aiMaxTokens,
-        temperature: request.temperature || settings.aiTemperature,
-        tools: request.tools,
-        tool_choice: request.toolChoice,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Azure OpenAI API error: ${response.status} ${await response.text()}`);
+    const params: any = {
+      model: settings.azureDeploymentName || 'gpt-4',
+      messages: request.messages,
+      max_tokens: request.maxTokens || settings.aiMaxTokens,
+      temperature: request.temperature || settings.aiTemperature,
+    };
+    
+    // Add tools if they exist
+    if (request.tools && request.tools.length > 0) {
+      params.tools = request.tools;
+      params.tool_choice = 'auto';
     }
-
-    const data = await response.json();
-    console.log('Azure OpenAI API Response:', JSON.stringify(data, null, 2));
     
-    const message = data.choices[0].message;
-    console.log('Azure Message from API:', message);
-    console.log('Azure Message tool_calls:', message.tool_calls);
-    console.log('Azure Finish reason:', data.choices[0].finish_reason);
+    console.log(`[Azure SDK] Generating completion for deployment: ${settings.azureDeploymentName}`);
+    console.log(`[Azure SDK] Tools enabled:`, !!params.tools);
+    console.log(`[Azure SDK] Tools count:`, params.tools?.length);
+    console.log(`[Azure SDK] Messages count:`, request.messages.length);
+    console.log(`[Azure SDK] Full request params:`, JSON.stringify(params, null, 2));
+    
+    const completion = await client.chat.completions.create(params);
+    
+    console.log('[Azure SDK] Full response:', JSON.stringify(completion, null, 2));
+    console.log('[Azure SDK] Response received');
+    console.log('[Azure SDK] Finish reason:', completion.choices[0]?.finish_reason);
+    
+    const message = completion.choices[0]?.message;
+    console.log('[Azure SDK] Message:', JSON.stringify(message, null, 2));
+    console.log('[Azure SDK] Message tool_calls:', message?.tool_calls);
     
     // Handle tool calls
-    if (message.tool_calls && message.tool_calls.length > 0) {
-      console.log('Found tool calls in Azure API response:', message.tool_calls);
+    if (message?.tool_calls && message.tool_calls.length > 0) {
+      console.log('[Azure SDK] Found tool calls:', message.tool_calls);
       return {
-        content: JSON.stringify(message.tool_calls),
-        usage: data.usage,
-        model: data.model,
-        finishReason: data.choices[0].finish_reason,
-        toolCalls: message.tool_calls,
+        content: message.content || '',
+        usage: completion.usage ? {
+          promptTokens: completion.usage.prompt_tokens,
+          completionTokens: completion.usage.completion_tokens,
+          totalTokens: completion.usage.total_tokens,
+        } : undefined,
+        model: completion.model,
+        finishReason: completion.choices[0]?.finish_reason,
+        toolCalls: message.tool_calls as any,
       };
     }
     
-    // Check if finish reason is tool_calls but no tool_calls in message
-    if (data.choices[0].finish_reason === 'tool_calls') {
-      console.log('WARNING: Azure finish_reason is tool_calls but no tool_calls found in message');
-      console.log('Azure Message keys:', Object.keys(message));
-      console.log('Azure Full message structure:', JSON.stringify(message, null, 2));
-    }
-    
-    console.log('No tool calls found in Azure response, returning regular content');
     return {
-      content: message.content || '',
-      usage: data.usage,
-      model: data.model,
-      finishReason: data.choices[0].finish_reason,
+      content: message?.content || '',
+      usage: completion.usage ? {
+        promptTokens: completion.usage.prompt_tokens,
+        completionTokens: completion.usage.completion_tokens,
+        totalTokens: completion.usage.total_tokens,
+      } : undefined,
+      model: completion.model,
+      finishReason: completion.choices[0]?.finish_reason,
     };
   }
 
   async generateStream(request: AIRequest, settings: BookSettings, onChunk: (chunk: AIStreamResponse) => void): Promise<AIResponse> {
-    const endpoint = `${settings.azureEndpoint}/openai/deployments/${settings.azureDeploymentName}/chat/completions?api-version=${settings.azureApiVersion || '2024-02-15-preview'}`;
+    const client = this.getClient(settings);
     
-    const requestBody = {
-      model: settings.azureDeploymentName, // Use deployment name as model for Azure
+    const params: any = {
+      model: settings.azureDeploymentName || 'gpt-4',
       messages: request.messages,
       max_tokens: request.maxTokens || settings.aiMaxTokens,
       temperature: request.temperature || settings.aiTemperature,
       stream: true,
     };
     
-    // Debug: Log the actual request being sent
-    console.log('Azure OpenAI Request:', {
-      endpoint,
-      max_tokens: requestBody.max_tokens,
-      model: requestBody.model,
-      messageCount: requestBody.messages.length
-    });
+    console.log(`[Azure SDK] Streaming completion for deployment: ${settings.azureDeploymentName}`);
     
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-key': settings.aiApiKey,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Azure OpenAI API error: ${response.status} ${await response.text()}`);
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error('No response body');
-    }
-
-    const decoder = new TextDecoder();
+    const stream = await client.chat.completions.create(params) as any;
+    
     let fullContent = '';
     let usage: any = undefined;
+    let finishReason: string | null = null;
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') continue;
-
-            try {
-              const parsed = JSON.parse(data);
-              const content = parsed.choices?.[0]?.delta?.content;
-              const finishReason = parsed.choices?.[0]?.finish_reason;
-              
-              if (finishReason) {
-                console.log('Azure OpenAI finish reason:', finishReason);
-              }
-              
-              if (content) {
-                fullContent += content;
-                onChunk({
-                  content: fullContent,
-                  isComplete: false,
-                  usage: parsed.usage,
-                });
-              }
-            } catch (e) {
-              // Ignore parsing errors for streaming
-            }
-          }
-        }
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta;
+      const content = delta?.content;
+      
+      if (content) {
+        fullContent += content;
+        onChunk({
+          content: fullContent,
+          isComplete: false,
+          usage: chunk.usage ? {
+            promptTokens: chunk.usage.prompt_tokens,
+            completionTokens: chunk.usage.completion_tokens,
+            totalTokens: chunk.usage.total_tokens,
+          } : undefined,
+        });
       }
-    } finally {
-      reader.releaseLock();
+      
+      if (chunk.choices[0]?.finish_reason) {
+        finishReason = chunk.choices[0].finish_reason;
+      }
+      
+      if (chunk.usage) {
+        usage = {
+          promptTokens: chunk.usage.prompt_tokens,
+          completionTokens: chunk.usage.completion_tokens,
+          totalTokens: chunk.usage.total_tokens,
+        };
+      }
     }
 
     onChunk({
@@ -421,7 +406,8 @@ export class AzureOpenAIProvider implements AIProviderInterface {
     return {
       content: fullContent,
       usage,
-      model: settings.azureDeploymentName,
+      model: settings.azureDeploymentName || 'gpt-4',
+      finishReason: finishReason || 'stop',
     };
   }
 
@@ -681,10 +667,10 @@ export function getCurrentAIProvider(settings: BookSettings): AIProviderInterfac
   return {
     getProvider: () => provider.getProvider(),
     generateText: (request: AIRequest) => provider.generateText(request, settings),
-    generateStream: (request: AIRequest, onChunk: (chunk: AIStreamResponse) => void) => 
+    generateStream: (request: AIRequest, settingsParam: BookSettings, onChunk: (chunk: AIStreamResponse) => void) => 
       provider.generateStream(request, settings, onChunk),
     generateWithTools: (request: AIRequest) => provider.generateWithTools(request, settings),
-    validateSettings: (settings: BookSettings) => provider.validateSettings(settings),
-    testConnection: (settings: BookSettings) => provider.testConnection(settings),
+    validateSettings: (settingsParam: BookSettings) => provider.validateSettings(settingsParam),
+    testConnection: (settingsParam: BookSettings) => provider.testConnection(settingsParam),
   };
 }

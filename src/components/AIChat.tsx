@@ -20,7 +20,7 @@ interface ChatMessage {
 }
 
 export default function AIChat({ currentSceneId, onSceneUpdate }: AIChatProps) {
-  const { getSceneById } = useBookStore();
+  const { getSceneById, selectedText, selectionStart, selectionEnd } = useBookStore();
   const {
     currentSceneId: contextSceneId,
     messages,
@@ -95,9 +95,11 @@ export default function AIChat({ currentSceneId, onSceneUpdate }: AIChatProps) {
       }
 
       // Build context for the AI
+      const hasSelection = selectedText && selectedText.length > 0;
       const systemPrompt = `You are an AI writing assistant helping with a fiction book. You have access to tools that allow you to edit text directly and access information about the entire book.
 
 **Current Scene:**
+- Scene ID: ${currentSceneId} (USE THIS ID for all text editing tools)
 - Title: ${scene.title}
 - Goal: ${scene.goal || 'Not specified'}
 - Conflict: ${scene.conflict || 'Not specified'}
@@ -107,30 +109,18 @@ export default function AIChat({ currentSceneId, onSceneUpdate }: AIChatProps) {
 - Clock: ${scene.clock || 'Not specified'}
 - Crucible: ${scene.crucible || 'Not specified'}
 - POV: ${scene.pov || 'Not specified'}
+- Content Length: ${scene.content.length} characters
 - Current Content: ${scene.content.substring(0, 1000)}${scene.content.length > 1000 ? '...' : ''}
 
-**Available Text Editing Tools:**
-- replace_text: Replace a specific range of text
-- insert_text: Insert text at a specific position
-- add_paragraph: Add a new paragraph
-- rewrite_sentence: Rewrite a specific sentence
-- improve_tone: Improve the tone of a section
-- expand_description: Expand a description with more detail
-- add_dialogue: Add dialogue between characters
-- get_scene_info: Get detailed scene information
+${hasSelection ? `**SELECTED TEXT (User has specifically selected this text for editing):**
+\`\`\`
+${selectedText}
+\`\`\`
+**Selection Range:** Characters ${selectionStart} to ${selectionEnd}
 
-**Available Book Access Tools:**
-- get_book_info: Get basic information about the book
-- get_chapter_list: Get a list of all chapters
-- get_chapter_content: Get the full content of a specific chapter
-- get_scene_content: Get the full content of a specific scene
-- get_chapters_by_numbers: Get content for specific chapters by numbers (e.g., [1, 2])
-- get_scene_summary: Get a summary of a scene
-- get_chapter_summary: Get a summary of a chapter
-- search_scenes: Search for scenes by various criteria
-- get_book_statistics: Get comprehensive book statistics
+IMPORTANT: The user has selected specific text in the editor. When they ask for edits, improvements, or changes, they are referring to THIS SELECTED TEXT, not the entire scene. Focus your attention and any text editing operations on this selected portion unless they explicitly ask about the entire scene.` : '**No Text Selected:** The user is working with the entire scene.'}
 
-Use these tools to help the user with their book. You can access any chapter or scene in the book to provide comprehensive analysis and feedback. Always explain what you're doing and why.`;
+Always use the appropriate tool to help the user with their book. You can access any chapter or scene in the book to provide comprehensive analysis and feedback. Always explain what you're doing and why.`;
 
       // Build conversation history including previous messages from shared context
       let conversationMessages: any[] = [
@@ -160,7 +150,9 @@ Use these tools to help the user with their book. You can access any chapter or 
       let maxIterations = 10; // Prevent infinite loops
       let iteration = 0;
 
-      console.log('Starting AI conversation with tools:', [...getAITools(), ...getBookAccessAITools()]);
+      const allTools = [...getAITools(), ...getBookAccessAITools()];
+      console.log('Starting AI conversation with tools count:', allTools.length);
+      console.log('First 3 tools:', JSON.stringify(allTools.slice(0, 3), null, 2));
 
       while (iteration < maxIterations) {
         iteration++;
@@ -171,7 +163,7 @@ Use these tools to help the user with their book. You can access any chapter or 
           model: book.settings.aiModel || 'gpt-4',
           maxTokens: 2000,
           temperature: 0.7,
-          tools: [...getAITools(), ...getBookAccessAITools()],
+          tools: allTools,
           toolChoice: 'auto',
         }, book.settings);
 
@@ -292,13 +284,18 @@ Use these tools to help the user with their book. You can access any chapter or 
       {/* Header - Fixed height */}
       <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-start justify-between">
-          <div>
+          <div className="flex-1">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               AI Writing Assistant
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {currentSceneId ? 'Ready to help with your scene' : 'Select a scene to get started'}
             </p>
+            {selectedText && selectedText.length > 0 && (
+              <div className="mt-2 px-2 py-1 bg-blue-100 dark:bg-blue-900 rounded text-xs text-blue-800 dark:text-blue-200">
+                ✓ Text selected ({selectedText.length} characters)
+              </div>
+            )}
           </div>
           <button
             onClick={handleNewConversation}
@@ -312,7 +309,7 @@ Use these tools to help the user with their book. You can access any chapter or 
       </div>
 
       {/* Messages - Scrollable area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
         {contextLoading || activeChatMode !== 'scene' ? (
           <div className="text-center text-gray-500 dark:text-gray-400">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
@@ -332,6 +329,9 @@ Use these tools to help the user with their book. You can access any chapter or 
               <li>• "Give me book statistics"</li>
               <li>• "Expand this description"</li>
             </ul>
+            <p className="text-xs mt-4 italic">
+              💡 Tip: Select text in the editor, and the AI will focus on that selection!
+            </p>
           </div>
         ) : (
           messages.map((message) => (
@@ -346,7 +346,7 @@ Use these tools to help the user with their book. You can access any chapter or 
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
                 }`}
               >
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                <p className="text-sm whitespace-pre-wrap break-words overflow-wrap-anywhere">{message.content}</p>
                 <p className="text-xs opacity-70 mt-1">
                   {new Date(message.timestamp).toLocaleTimeString()}
                 </p>

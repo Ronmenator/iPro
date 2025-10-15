@@ -33,15 +33,49 @@ export const textEditTools: TextEditTool[] = [
     execute: async (args) => {
       try {
         const { sceneId, start, end, newText } = args;
-        const { replaceTextRange } = useBookStore.getState();
+        const { getSceneById, replaceTextRange } = useBookStore.getState();
+        
+        // Verify scene exists
+        const scene = getSceneById(sceneId);
+        if (!scene) {
+          return {
+            success: false,
+            message: `Scene with ID "${sceneId}" not found. Please use the current scene's ID.`,
+          };
+        }
+        
+        // Verify positions are valid
+        if (start < 0 || end > scene.content.length || start > end) {
+          return {
+            success: false,
+            message: `Invalid text range: start=${start}, end=${end}. Scene content length is ${scene.content.length}.`,
+          };
+        }
+        
+        // Get the text being replaced for logging
+        const oldText = scene.content.substring(start, end);
+        console.log(`[replace_text] Replacing text in scene "${scene.title}" (ID: ${sceneId})`);
+        console.log(`[replace_text] Position: ${start} to ${end}`);
+        console.log(`[replace_text] Old text: "${oldText.substring(0, 100)}${oldText.length > 100 ? '...' : ''}"`);
+        console.log(`[replace_text] New text: "${newText.substring(0, 100)}${newText.length > 100 ? '...' : ''}"`);
+        console.log(`[replace_text] Scene content length before: ${scene.content.length}`);
         
         replaceTextRange(sceneId, start, end, newText);
         
+        // Verify the change was made
+        const updatedScene = getSceneById(sceneId);
+        if (updatedScene) {
+          console.log(`[replace_text] Scene content length after: ${updatedScene.content.length}`);
+          const updatedText = updatedScene.content.substring(start, Math.min(start + newText.length, updatedScene.content.length));
+          console.log(`[replace_text] New text in scene: "${updatedText.substring(0, 100)}${updatedText.length > 100 ? '...' : ''}"`);
+        }
+        
         return {
           success: true,
-          message: `Replaced text from position ${start} to ${end}`,
+          message: `✓ Replaced text from position ${start} to ${end} (${oldText.length} → ${newText.length} characters)`,
         };
       } catch (error) {
+        console.error('replace_text error:', error);
         return {
           success: false,
           message: `Failed to replace text: ${error.message}`,
@@ -213,15 +247,45 @@ export const textEditTools: TextEditTool[] = [
     execute: async (args) => {
       try {
         const { sceneId, start, end, expandedText } = args;
-        const { replaceTextRange } = useBookStore.getState();
+        const { getSceneById, replaceTextRange } = useBookStore.getState();
+        
+        // Verify scene exists
+        const scene = getSceneById(sceneId);
+        if (!scene) {
+          return {
+            success: false,
+            message: `Scene with ID "${sceneId}" not found.`,
+          };
+        }
+        
+        // Verify positions are valid
+        if (start < 0 || end > scene.content.length || start > end) {
+          return {
+            success: false,
+            message: `Invalid text range: start=${start}, end=${end}. Scene content length is ${scene.content.length}.`,
+          };
+        }
+        
+        const oldText = scene.content.substring(start, end);
+        console.log(`[expand_description] Expanding text in scene "${scene.title}" (ID: ${sceneId})`);
+        console.log(`[expand_description] Position: ${start} to ${end}`);
+        console.log(`[expand_description] Old text (${oldText.length} chars): "${oldText}"`);
+        console.log(`[expand_description] Expanded text (${expandedText.length} chars): "${expandedText}"`);
         
         replaceTextRange(sceneId, start, end, expandedText);
         
+        // Verify the change
+        const updatedScene = getSceneById(sceneId);
+        if (updatedScene) {
+          console.log(`[expand_description] Scene content length after: ${updatedScene.content.length}`);
+        }
+        
         return {
           success: true,
-          message: 'Description expanded with more detail',
+          message: `✓ Expanded description from ${oldText.length} to ${expandedText.length} characters`,
         };
       } catch (error) {
+        console.error('expand_description error:', error);
         return {
           success: false,
           message: `Failed to expand description: ${error.message}`,

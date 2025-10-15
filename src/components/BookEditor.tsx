@@ -168,7 +168,7 @@ export default function BookEditor() {
           </div>
 
           {/* Right Panel - AI Chat or Research */}
-          <div className="w-80 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col min-h-0">
+          <div className="w-80 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col min-h-0 overflow-x-hidden">
             {activeTab === 'ai-chat' && (
               <AIChat
                 currentSceneId={currentSceneId}

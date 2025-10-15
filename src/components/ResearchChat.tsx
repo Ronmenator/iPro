@@ -361,7 +361,7 @@ ${book?.research.map(entry => `- ${entry.title}: ${entry.content.substring(0, 10
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
         {contextLoading || activeChatMode !== 'research' ? (
           <div className="text-center text-gray-500 dark:text-gray-400">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
@@ -393,7 +393,7 @@ ${book?.research.map(entry => `- ${entry.title}: ${entry.content.substring(0, 10
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
                 }`}
               >
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                <p className="text-sm whitespace-pre-wrap break-words overflow-wrap-anywhere">{message.content}</p>
                 <p className="text-xs opacity-70 mt-1">
                   {new Date(message.timestamp).toLocaleTimeString()}
                 </p>
@@ -416,7 +416,7 @@ ${book?.research.map(entry => `- ${entry.title}: ${entry.content.substring(0, 10
         )}
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded-lg">
+            <div className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded-lg break-words">
               <div className="flex items-center space-x-2">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
                 <span className="text-sm">Researching...</span>

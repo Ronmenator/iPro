@@ -9,16 +9,21 @@ interface SceneEditorProps {
 }
 
 export default function SceneEditor({ sceneId, onSceneUpdate }: SceneEditorProps) {
-  const { getSceneById, getChapterById, updateSceneContent, book } = useBookStore();
-  const [scene, setScene] = useState(getSceneById(sceneId));
+  // Subscribe to bookVersion to trigger re-renders when content changes
+  const bookVersion = useBookStore((state) => state.bookVersion);
+  const getSceneById = useBookStore((state) => state.getSceneById);
+  const scene = getSceneById(sceneId);
+  
+  const { getChapterById, updateSceneContent, setTextSelection, book } = useBookStore();
   const [isWriting, setIsWriting] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [writeResult, setWriteResult] = useState<{ success: boolean; message: string } | null>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
+  // Clear selection only when scene ID changes, not on every content update
   useEffect(() => {
-    const currentScene = getSceneById(sceneId);
-    setScene(currentScene);
-  }, [sceneId, getSceneById]);
+    setTextSelection(null, null, null);
+  }, [sceneId, setTextSelection]);
 
   if (!scene) {
     return (
@@ -30,7 +35,22 @@ export default function SceneEditor({ sceneId, onSceneUpdate }: SceneEditorProps
 
   const handleContentChange = (content: string) => {
     updateSceneContent(sceneId, content);
-    setScene({ ...scene, content, currentWords: content.split(/\s+/).filter(word => word.length > 0).length });
+  };
+
+  // Track text selection
+  const handleSelectionChange = () => {
+    if (textareaRef.current) {
+      const start = textareaRef.current.selectionStart;
+      const end = textareaRef.current.selectionEnd;
+      
+      if (start !== end) {
+        const selectedText = textareaRef.current.value.substring(start, end);
+        setTextSelection(selectedText, start, end);
+      } else {
+        // Clear selection if nothing is selected
+        setTextSelection(null, null, null);
+      }
+    }
   };
 
   const handleWriteScene = async () => {
@@ -398,8 +418,12 @@ This scene follows another scene in the same chapter. Continue the story flow na
       {/* Editor */}
       <div className="flex-1 p-4">
         <textarea
+          ref={textareaRef}
           value={scene.content}
           onChange={(e) => handleContentChange(e.target.value)}
+          onSelect={handleSelectionChange}
+          onMouseUp={handleSelectionChange}
+          onKeyUp={handleSelectionChange}
           placeholder="Write your scene here..."
           className="w-full h-full p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           style={{ minHeight: '400px' }}

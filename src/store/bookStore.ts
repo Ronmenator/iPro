@@ -9,6 +9,13 @@ interface BookStore {
   currentSceneId: string | null;
   isLoading: boolean;
   error: string | null;
+  bookVersion: number; // Increment this whenever book content changes to trigger re-renders
+  
+  // Text selection state
+  selectedText: string | null;
+  selectionStart: number | null;
+  selectionEnd: number | null;
+  setTextSelection: (text: string | null, start: number | null, end: number | null) => void;
   
   // Book management
   createBook: (title: string, author: string, genre: string) => void;
@@ -69,6 +76,16 @@ export const useBookStore = create<BookStore>()(
       currentSceneId: null,
       isLoading: false,
       error: null,
+      bookVersion: 0,
+      
+      // Text selection state
+      selectedText: null,
+      selectionStart: null,
+      selectionEnd: null,
+      
+      setTextSelection: (text: string | null, start: number | null, end: number | null) => {
+        set({ selectedText: text, selectionStart: start, selectionEnd: end });
+      },
       
       // Book management
       createBook: (title: string, author: string, genre: string) => {
@@ -148,11 +165,11 @@ export const useBookStore = create<BookStore>()(
       },
       
       updateScene: (sceneId: string, updates: Partial<Scene>) => {
-        const { book } = get();
+        const { book, bookVersion } = get();
         if (!book) return;
         
         const updatedBook = bookOperations.updateScene(book, sceneId, updates);
-        set({ book: updatedBook });
+        set({ book: updatedBook, bookVersion: bookVersion + 1 });
       },
       
       deleteScene: (sceneId: string) => {
@@ -177,35 +194,35 @@ export const useBookStore = create<BookStore>()(
       
       // Content operations
       updateSceneContent: (sceneId: string, content: string) => {
-        const { book } = get();
+        const { book, bookVersion } = get();
         if (!book) return;
         
         const updatedBook = bookOperations.updateSceneContent(book, sceneId, content);
-        set({ book: updatedBook });
+        set({ book: updatedBook, bookVersion: bookVersion + 1 });
       },
       
       insertTextAtPosition: (sceneId: string, position: number, text: string) => {
-        const { book } = get();
+        const { book, bookVersion } = get();
         if (!book) return;
         
         const updatedBook = bookOperations.insertTextAtPosition(book, sceneId, position, text);
-        set({ book: updatedBook });
+        set({ book: updatedBook, bookVersion: bookVersion + 1 });
       },
       
       replaceTextRange: (sceneId: string, start: number, end: number, newText: string) => {
-        const { book } = get();
+        const { book, bookVersion } = get();
         if (!book) return;
         
         const updatedBook = bookOperations.replaceTextRange(book, sceneId, start, end, newText);
-        set({ book: updatedBook });
+        set({ book: updatedBook, bookVersion: bookVersion + 1 });
       },
       
       addParagraph: (sceneId: string, paragraph: string, position?: number) => {
-        const { book } = get();
+        const { book, bookVersion } = get();
         if (!book) return;
         
         const updatedBook = bookOperations.addParagraph(book, sceneId, paragraph, position);
-        set({ book: updatedBook });
+        set({ book: updatedBook, bookVersion: bookVersion + 1 });
       },
       
       // Research operations
