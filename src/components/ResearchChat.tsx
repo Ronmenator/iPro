@@ -1,9 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useBookStore } from '../store/bookStore';
 import { getCurrentAIProvider } from '../ai/providers';
+import { getResearchAITools, executeResearchToolCall } from '../ai/researchTools';
+import { getBookAccessAITools, executeBookAccessToolCall } from '../ai/bookAccessTools';
+import { useConversation } from '../context/ConversationContext';
 
 interface ResearchChatProps {
   onResearchUpdate: (entry: { title: string; content: string; source: string; tags: string[] }) => void;
+  currentSceneId?: string | null;
 }
 
 interface ChatMessage {
@@ -14,12 +18,25 @@ interface ChatMessage {
   researchData?: any;
 }
 
-export default function ResearchChat({ onResearchUpdate }: ResearchChatProps) {
+export default function ResearchChat({ onResearchUpdate, currentSceneId }: ResearchChatProps) {
   const { book } = useBookStore();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const {
+    messages,
+    isLoading: contextLoading,
+    activeChatMode,
+    setActiveChatMode,
+    addMessage,
+    clearCurrentConversation,
+    getConversationHistory
+  } = useConversation();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Set active chat mode for research on mount
+  useEffect(() => {
+    setActiveChatMode('research'); // Set research mode
+  }, []); // Only run once on mount
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -27,9 +44,10 @@ export default function ResearchChat({ onResearchUpdate }: ResearchChatProps) {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, contextLoading]);
 
-  const addMessage = (role: 'user' | 'assistant', content: string, researchData?: any) => {
+  const addLocalMessage = (role: 'user' | 'assistant', content: string, researchData?: any) => {
+    // Also maintain local ChatMessage for UI display if needed
     const message: ChatMessage = {
       id: Date.now().toString(),
       role,
@@ -37,7 +55,7 @@ export default function ResearchChat({ onResearchUpdate }: ResearchChatProps) {
       timestamp: Date.now(),
       researchData,
     };
-    setMessages(prev => [...prev, message]);
+    // Note: We'll use the shared context for display instead
   };
 
   const handleSendMessage = async () => {
@@ -45,12 +63,23 @@ export default function ResearchChat({ onResearchUpdate }: ResearchChatProps) {
 
     const userMessage = input.trim();
     setInput('');
-    addMessage('user', userMessage);
+
+    // Add user message to shared conversation
+    await addMessage({
+      role: 'user',
+      content: userMessage,
+      source: 'research',
+      researchData: undefined, // User messages don't have research data
+    });
 
     setIsLoading(true);
 
     try {
-      const aiProvider = getCurrentAIProvider();
+      if (!book?.settings) {
+        throw new Error('Book settings not configured');
+      }
+
+      const aiProvider = getCurrentAIProvider(book.settings);
       if (!aiProvider) {
         throw new Error('AI provider not configured');
       }
@@ -64,6 +93,17 @@ export default function ResearchChat({ onResearchUpdate }: ResearchChatProps) {
 4. **Technical Research**: Research specific topics, professions, technologies, historical events
 5. **Writing Research**: Research writing techniques, styles, publishing information
 
+**Available Tools:**
+- **create_research_entry**: Create a research entry for the book with title, content, source, and tags
+- **get_current_scene_content**: Get the content of the currently selected scene
+- **get_scene_content**: Get the full content of a specific scene (requires sceneId)
+- **get_scene_info**: Get basic information about a scene (title, goal, conflict, etc.)
+- **expand_description**: Expand a description with more sensory details and immersive language
+- **get_book_info**: Get basic information about the book including title, author, genre, and settings
+- **get_chapter_list**: Get a list of all chapters with their basic information
+- **get_chapter_content**: Get the full content of a specific chapter
+- **replace_text**: Replace text in the currently selected scene
+
 **Current Book Context:**
 - Title: ${book?.title || 'Untitled'}
 - Genre: ${book?.genre || 'Not specified'}
@@ -72,30 +112,195 @@ export default function ResearchChat({ onResearchUpdate }: ResearchChatProps) {
 **Available Research Entries:**
 ${book?.research.map(entry => `- ${entry.title}: ${entry.content.substring(0, 100)}...`).join('\n') || 'No research entries yet'}
 
-When the user asks for research, provide detailed, helpful information and suggest creating a research entry to save the information for future reference.`;
+**Instructions:**
+- When providing research, always offer to save valuable information as a research entry
+- If the user confirms they want to save something, immediately use the create_research_entry tool
+- After using the tool, confirm the action was completed
+- If you have detailed research that would be useful to save, proactively suggest creating an entry and use the tool if appropriate`;
 
-      const response = await aiProvider.generateText({
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage }
-        ],
-        model: 'gpt-4',
-        maxTokens: 2000,
-        temperature: 0.7,
+      // Build conversation history including previous messages from shared context
+      let conversationMessages: any[] = [
+        { role: 'system', content: systemPrompt }
+      ];
+
+      // Get recent conversation history (last 20 messages to avoid token limits)
+      // This includes the user message we just added above
+      const recentConversation = await getConversationHistory(undefined, 20, 'research'); // Research conversation
+
+      console.log(`Recent conversation history (${recentConversation.length} messages):`);
+      recentConversation.forEach((msg, idx) => {
+        console.log(`${idx + 1}. [${msg.role}] ${msg.content.substring(0, 100)}${msg.content.length > 100 ? '...' : ''}`);
       });
 
-      addMessage('assistant', response.content);
+      // Add conversation history (this already includes the current user message we just added to the DB)
+      for (const msg of recentConversation) {
+        if (msg.role === 'user' || msg.role === 'assistant') {
+          conversationMessages.push({
+            role: msg.role,
+            content: msg.content
+          });
+        }
+      }
+
+      // Tool calling loop - continue until AI doesn't want to use tools
+      let maxIterations = 10; // Prevent infinite loops
+      let iteration = 0;
+
+      const availableTools = [...getResearchAITools(), ...getBookAccessAITools()];
+      console.log('Starting research AI conversation with tools:', availableTools.map(t => t.function.name));
+      console.log('Tool details:', JSON.stringify(availableTools, null, 2));
+
+      while (iteration < maxIterations) {
+        iteration++;
+        console.log(`\n=== Research AI Iteration ${iteration} ===`);
+
+        const tools = getResearchAITools();
+        const request = {
+          messages: conversationMessages,
+          model: book.settings.aiModel || 'gpt-4',
+          maxTokens: 2000,
+          temperature: 0.7,
+          tools: tools,
+          toolChoice: 'auto' as const,
+        };
+
+        console.log('Sending request to AI:', {
+          model: request.model,
+          toolCount: tools.length,
+          tools: tools.map(t => t.function.name),
+          toolChoice: request.toolChoice,
+          messageCount: conversationMessages.length
+        });
+
+        const response = await aiProvider.generateWithTools(request, book.settings);
+
+        console.log('Research AI Response:', {
+          content: response.content,
+          toolCalls: response.toolCalls,
+          finishReason: response.finishReason
+        });
+
+        // Check if the response contains tool calls
+        if (response.toolCalls && response.toolCalls.length > 0) {
+          console.log(`Found ${response.toolCalls.length} tool calls:`, response.toolCalls);
+
+          // Add AI response with tool calls to conversation
+          conversationMessages.push({
+            role: 'assistant',
+            content: response.content,
+            tool_calls: response.toolCalls
+          });
+
+          // Execute tool calls
+          for (const toolCall of response.toolCalls) {
+            console.log('Processing research tool call:', toolCall);
+
+            // Convert API tool call format to our expected format
+            let toolCallData;
+            if (toolCall.function) {
+              toolCallData = {
+                name: toolCall.function.name,
+                arguments: toolCall.function.arguments
+              };
+            } else if (toolCall.type === 'tool_use') {
+              toolCallData = {
+                name: toolCall.name,
+                arguments: JSON.stringify(toolCall.input)
+              };
+            } else {
+              console.log('Unknown tool call format:', toolCall);
+              continue;
+            }
+
+            console.log('Research tool call data:', toolCallData);
+
+            // Try research tools first, then book access tools
+            let result = await executeResearchToolCall(toolCallData);
+            console.log('Research tool result:', result);
+
+            if (!result.success) {
+              result = await executeBookAccessToolCall(toolCallData);
+              console.log('Book access tool result:', result);
+            }
+
+            // Add tool result to conversation for next iteration
+            const toolCallId = toolCall.id || `call_${Date.now()}`;
+            conversationMessages.push({
+              role: 'tool',
+              content: JSON.stringify(result),
+              tool_call_id: toolCallId,
+            });
+
+            console.log('Added research tool result to conversation');
+            const toolName = toolCall.function?.name || toolCall.name || 'unknown';
+            await addMessage({
+              role: 'assistant',
+              content: `Executed tool: ${toolName}. ${result.message}`,
+              source: 'research',
+              researchData: undefined,
+            });
+          }
+        } else {
+          // No tool calls, show the final response and break the loop
+          console.log('No tool calls found, ending research conversation');
+          await addMessage({
+            role: 'assistant',
+            content: response.content,
+            source: 'research',
+            researchData: undefined,
+          });
+          break;
+        }
+      }
+
+      if (iteration >= maxIterations) {
+        await addMessage({
+          role: 'assistant',
+          content: 'Reached maximum tool calling iterations. Please try a simpler request.',
+          source: 'research',
+          researchData: undefined,
+        });
+      }
 
     } catch (error) {
-      addMessage('assistant', `Error: ${error.message}`);
+      await addMessage({
+        role: 'assistant',
+        content: `Error: ${error.message}`,
+        source: 'research',
+        researchData: undefined,
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleCreateResearchEntry = (title: string, content: string, source: string = 'AI Research', tags: string[] = []) => {
-    onResearchUpdate({ title, content, source, tags });
-    addMessage('assistant', `Created research entry: "${title}"`);
+  const handleCreateResearchEntry = async (title: string, content: string, source: string = 'AI Research', tags: string[] = []) => {
+    try {
+      // Use the book operations to add research as a scene
+      const { book } = useBookStore.getState();
+      if (book) {
+        const { addResearchScene } = useBookStore.getState();
+        await addResearchScene({ title, content, source, tags });
+      }
+
+      // Also call the original callback for backward compatibility
+      onResearchUpdate({ title, content, source, tags });
+
+      await addMessage({
+        role: 'assistant',
+        content: `Created research entry: "${title}"`,
+        source: 'research',
+        researchData: undefined,
+      });
+    } catch (error) {
+      console.error('Failed to create research entry:', error);
+      await addMessage({
+        role: 'assistant',
+        content: `Error creating research entry: ${error.message}`,
+        source: 'research',
+        researchData: undefined,
+      });
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -109,12 +314,23 @@ When the user asks for research, provide detailed, helpful information and sugge
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Research Assistant
-        </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Research topics for your book
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Research Assistant
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Research topics for your book
+            </p>
+          </div>
+          <button
+            onClick={() => clearCurrentConversation()}
+            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Clear research conversation"
+          >
+            New
+          </button>
+        </div>
       </div>
 
       {/* Research Entries */}
@@ -146,7 +362,12 @@ When the user asks for research, provide detailed, helpful information and sugge
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 ? (
+        {contextLoading || activeChatMode !== 'research' ? (
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <p>Loading research conversation...</p>
+          </div>
+        ) : messages.length === 0 ? (
           <div className="text-center text-gray-500 dark:text-gray-400">
             <p>Start researching topics for your book.</p>
             <p className="text-sm mt-2">
