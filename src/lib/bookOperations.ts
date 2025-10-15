@@ -519,13 +519,27 @@ function migrateBookData(data: any): Book {
   }
 
   // Handle new Book format - ensure settings are properly initialized and clean chapter titles
+  // Extract metadata from outline if available
+  const title = data.title || (data.outline?.title) || 'Untitled Book';
+  const author = data.author || (data.outline?.author) || 'Unknown Author';
+  const genre = data.genre || (data.outline?.step1_promise?.genre) || 'Fiction';
+  
   const migratedData = {
     ...data,
-    chapters: data.chapters.map((chapter: Chapter, index: number) => ({
+    id: data.id || generateId(),
+    title,
+    author,
+    genre,
+    description: data.description || '',
+    createdAt: data.createdAt || Date.now(),
+    lastModified: data.lastModified || Date.now(),
+    version: data.version || '1.0.0',
+    chapters: (data.chapters || []).map((chapter: Chapter, index: number) => ({
       ...chapter,
       number: index + 1, // Ensure sequential numbering based on position
       title: cleanChapterTitle(chapter.title || ''),
     })),
+    research: data.research || [],
     settings: {
       ...DEFAULT_BOOK_SETTINGS,
       ...data.settings,

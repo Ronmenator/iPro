@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BookSettings } from '../types/book';
 import { AIProviderFactory } from '../ai/providers';
+import { useBookStore } from '../store/bookStore';
 
 interface BookSettingsProps {
   settings: BookSettings;
@@ -10,6 +11,7 @@ interface BookSettingsProps {
 export default function BookSettingsPanel({ settings, onSettingsUpdate }: BookSettingsProps) {
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const { book } = useBookStore();
 
   const providers = AIProviderFactory.getAllProviders();
 
@@ -96,6 +98,17 @@ export default function BookSettingsPanel({ settings, onSettingsUpdate }: BookSe
     }
   };
 
+  const handleBookMetadataUpdate = (field: 'title' | 'author' | 'genre' | 'description', value: string) => {
+    if (!book) return;
+    useBookStore.setState({
+      book: {
+        ...book,
+        [field]: value,
+        lastModified: Date.now(),
+      },
+    });
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -104,12 +117,81 @@ export default function BookSettingsPanel({ settings, onSettingsUpdate }: BookSe
           Book Settings
         </h3>
         <p className="text-sm text-gray-600 dark:text-gray-400">
-          Configure AI provider and other settings
+          Configure book metadata and AI provider settings
         </p>
       </div>
 
       {/* Settings Form */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        {/* Book Metadata Section */}
+        <div className="pb-4 border-b border-gray-200 dark:border-gray-700">
+          <h4 className="text-md font-semibold text-gray-900 dark:text-white mb-4">
+            Book Information
+          </h4>
+          
+          {/* Book Title */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Book Title
+            </label>
+            <input
+              type="text"
+              value={book?.title || ''}
+              onChange={(e) => handleBookMetadataUpdate('title', e.target.value)}
+              placeholder="Enter book title"
+              className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
+
+          {/* Author */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Author
+            </label>
+            <input
+              type="text"
+              value={book?.author || ''}
+              onChange={(e) => handleBookMetadataUpdate('author', e.target.value)}
+              placeholder="Enter author name"
+              className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
+
+          {/* Genre */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Genre
+            </label>
+            <input
+              type="text"
+              value={book?.genre || ''}
+              onChange={(e) => handleBookMetadataUpdate('genre', e.target.value)}
+              placeholder="Enter genre"
+              className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Description
+            </label>
+            <textarea
+              value={book?.description || ''}
+              onChange={(e) => handleBookMetadataUpdate('description', e.target.value)}
+              placeholder="Enter book description"
+              rows={3}
+              className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+            />
+          </div>
+        </div>
+
+        {/* AI Provider Section */}
+        <div>
+          <h4 className="text-md font-semibold text-gray-900 dark:text-white mb-4">
+            AI Configuration
+          </h4>
+        </div>
         {/* AI Provider */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
