@@ -115,33 +115,63 @@ export const bookOperations: BookOperations = {
   },
 
   updateScene: (book: Book, sceneId: string, updates: Partial<Scene>): Book => {
-    return {
-      ...book,
-      chapters: book.chapters.map(chapter => ({
-        ...chapter,
-        scenes: chapter.scenes.map(scene =>
-          scene.id === sceneId
-            ? { ...scene, ...updates, lastModified: Date.now() }
-            : scene
-        ),
-        lastModified: chapter.scenes.some(scene => scene.id === sceneId) ? Date.now() : chapter.lastModified,
-      })),
-      lastModified: Date.now(),
-    };
+    // Check if the scene is in a regular chapter
+    const isInChapter = book.chapters.some(chapter => 
+      chapter.scenes.some(scene => scene.id === sceneId)
+    );
+    
+    if (isInChapter) {
+      return {
+        ...book,
+        chapters: book.chapters.map(chapter => ({
+          ...chapter,
+          scenes: chapter.scenes.map(scene =>
+            scene.id === sceneId
+              ? { ...scene, ...updates, lastModified: Date.now() }
+              : scene
+          ),
+          lastModified: chapter.scenes.some(scene => scene.id === sceneId) ? Date.now() : chapter.lastModified,
+        })),
+        lastModified: Date.now(),
+      };
+    }
+    
+    // Otherwise, check if it's in the research chapter
+    if (book.researchChapter && book.researchChapter.scenes.some(scene => scene.id === sceneId)) {
+      return bookOperations.updateResearchScene(book, sceneId, updates);
+    }
+    
+    // Scene not found, return book unchanged
+    return book;
   },
 
   deleteScene: (book: Book, sceneId: string): Book => {
-    return {
-      ...book,
-      chapters: book.chapters.map(chapter => ({
-        ...chapter,
-        scenes: chapter.scenes
-          .filter(scene => scene.id !== sceneId)
-          .map((scene, index) => ({ ...scene, number: index + 1 })),
-        lastModified: chapter.scenes.some(scene => scene.id === sceneId) ? Date.now() : chapter.lastModified,
-      })),
-      lastModified: Date.now(),
-    };
+    // Check if the scene is in a regular chapter
+    const isInChapter = book.chapters.some(chapter => 
+      chapter.scenes.some(scene => scene.id === sceneId)
+    );
+    
+    if (isInChapter) {
+      return {
+        ...book,
+        chapters: book.chapters.map(chapter => ({
+          ...chapter,
+          scenes: chapter.scenes
+            .filter(scene => scene.id !== sceneId)
+            .map((scene, index) => ({ ...scene, number: index + 1 })),
+          lastModified: chapter.scenes.some(scene => scene.id === sceneId) ? Date.now() : chapter.lastModified,
+        })),
+        lastModified: Date.now(),
+      };
+    }
+    
+    // Otherwise, check if it's in the research chapter
+    if (book.researchChapter && book.researchChapter.scenes.some(scene => scene.id === sceneId)) {
+      return bookOperations.deleteResearchScene(book, sceneId);
+    }
+    
+    // Scene not found, return book unchanged
+    return book;
   },
 
   moveScene: (book: Book, sceneId: string, fromChapterId: string, toChapterId: string): Book => {
@@ -379,8 +409,14 @@ export const bookOperations: BookOperations = {
   },
 
   getSceneById: (book: Book, sceneId: string): Scene | undefined => {
+    // First check regular chapters
     for (const chapter of book.chapters) {
       const scene = chapter.scenes.find(scene => scene.id === sceneId);
+      if (scene) return scene;
+    }
+    // Then check research chapter
+    if (book.researchChapter) {
+      const scene = book.researchChapter.scenes.find(scene => scene.id === sceneId);
       if (scene) return scene;
     }
     return undefined;
