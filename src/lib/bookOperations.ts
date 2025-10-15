@@ -1,4 +1,4 @@
-import { Book, Chapter, Scene, ResearchEntry, BookSettings, generateId, DEFAULT_BOOK_SETTINGS } from '../types/book';
+import { Book, Chapter, Scene, ResearchEntry, BookSettings, BookOperations, generateId, DEFAULT_BOOK_SETTINGS } from '../types/book';
 
 /**
  * Book operations implementation
@@ -261,6 +261,109 @@ export const bookOperations: BookOperations = {
     };
   },
 
+  // Research chapter operations
+  getResearchChapter: (book: Book): Chapter | undefined => {
+    return book.researchChapter;
+  },
+
+  ensureResearchChapter: (book: Book): Book => {
+    if (book.researchChapter) {
+      return book;
+    }
+
+    const researchChapter: Chapter = {
+      id: generateId(),
+      number: book.chapters.length + 1,
+      title: 'Research',
+      summary: 'Research materials and notes for the book',
+      pov: '',
+      theme: 'Research',
+      goal: 'Organize research materials',
+      conflict: '',
+      outcome: '',
+      targetWords: 0,
+      currentWords: 0,
+      lastModified: Date.now(),
+      scenes: [],
+    };
+
+    return {
+      ...book,
+      researchChapter,
+      lastModified: Date.now(),
+    };
+  },
+
+  addResearchScene: (book: Book, entryData: Omit<ResearchEntry, 'id' | 'createdAt' | 'lastModified'>): Book => {
+    // Ensure research chapter exists
+    const bookWithResearchChapter = bookOperations.ensureResearchChapter(book);
+
+    const newScene: Scene = {
+      id: generateId(),
+      number: bookWithResearchChapter.researchChapter!.scenes.length + 1,
+      title: entryData.title,
+      goal: 'Research',
+      conflict: '',
+      outcome: '',
+      location: 'Research',
+      time: '',
+      clock: '',
+      crucible: '',
+      pov: '',
+      content: entryData.content,
+      targetWords: 0,
+      currentWords: entryData.content.split(' ').length,
+      lastModified: Date.now(),
+      generatedByAI: false,
+    };
+
+    return {
+      ...bookWithResearchChapter,
+      researchChapter: {
+        ...bookWithResearchChapter.researchChapter!,
+        scenes: [...bookWithResearchChapter.researchChapter!.scenes, newScene],
+        lastModified: Date.now(),
+      },
+      lastModified: Date.now(),
+    };
+  },
+
+  updateResearchScene: (book: Book, sceneId: string, updates: Partial<Scene>): Book => {
+    if (!book.researchChapter) {
+      return book;
+    }
+
+    const updatedScenes = book.researchChapter.scenes.map(scene =>
+      scene.id === sceneId ? { ...scene, ...updates, lastModified: Date.now() } : scene
+    );
+
+    return {
+      ...book,
+      researchChapter: {
+        ...book.researchChapter,
+        scenes: updatedScenes,
+        lastModified: Date.now(),
+      },
+      lastModified: Date.now(),
+    };
+  },
+
+  deleteResearchScene: (book: Book, sceneId: string): Book => {
+    if (!book.researchChapter) {
+      return book;
+    }
+
+    return {
+      ...book,
+      researchChapter: {
+        ...book.researchChapter,
+        scenes: book.researchChapter.scenes.filter(scene => scene.id !== sceneId),
+        lastModified: Date.now(),
+      },
+      lastModified: Date.now(),
+    };
+  },
+
   // Settings operations
   updateSettings: (book: Book, settings: Partial<BookSettings>): Book => {
     return {
@@ -307,13 +410,21 @@ export const bookOperations: BookOperations = {
 };
 
 /**
+ * Strip "Chapter XX:" prefix from chapter titles and ensure proper numbering
+ */
+function cleanChapterTitle(title: string): string {
+  // Remove "Chapter XX:" prefix pattern
+  return title.replace(/^Chapter\s+\d+:\s*/i, '').trim();
+}
+
+/**
  * Migrate book data from older versions
  */
 function migrateBookData(data: any): Book {
   // Handle old manuscript format with separate scenes array
   if (data.scenes && Array.isArray(data.scenes)) {
     // Convert old format to new Book format
-    const chapters = data.chapters.map((chapter: any) => {
+    const chapters = data.chapters.map((chapter: any, i: number) => {
       const chapterScenes = data.scenes
         .filter((scene: any) => scene.chapter === chapter.id)
         .map((scene: any, index: number) => ({
@@ -337,8 +448,8 @@ function migrateBookData(data: any): Book {
 
       return {
         id: chapter.id,
-        number: chapter.number || 1,
-        title: chapter.title,
+        number: i + 1, // Always assign sequential numbers based on position
+        title: chapter.title || '',
         summary: chapter.summary || '',
         pov: chapter.pov || '',
         theme: chapter.theme || '',
@@ -351,6 +462,7 @@ function migrateBookData(data: any): Book {
         scenes: chapterScenes,
       };
     });
+
 
     return {
       id: data.id || generateId(),
@@ -370,9 +482,14 @@ function migrateBookData(data: any): Book {
     };
   }
 
-  // Handle new Book format - ensure settings are properly initialized
+  // Handle new Book format - ensure settings are properly initialized and clean chapter titles
   const migratedData = {
     ...data,
+    chapters: data.chapters.map((chapter: Chapter, index: number) => ({
+      ...chapter,
+      number: index + 1, // Ensure sequential numbering based on position
+      title: cleanChapterTitle(chapter.title || ''),
+    })),
     settings: {
       ...DEFAULT_BOOK_SETTINGS,
       ...data.settings,

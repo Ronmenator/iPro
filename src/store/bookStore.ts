@@ -39,6 +39,11 @@ interface BookStore {
   addResearchEntry: (entryData: Omit<ResearchEntry, 'id' | 'createdAt' | 'lastModified'>) => void;
   updateResearchEntry: (entryId: string, updates: Partial<ResearchEntry>) => void;
   deleteResearchEntry: (entryId: string) => void;
+
+  // Research chapter operations
+  addResearchScene: (entryData: Omit<ResearchEntry, 'id' | 'createdAt' | 'lastModified'>) => void;
+  updateResearchScene: (sceneId: string, updates: Partial<Scene>) => void;
+  deleteResearchScene: (sceneId: string) => void;
   
   // Settings operations
   updateSettings: (settings: Partial<BookSettings>) => void;
@@ -68,14 +73,18 @@ export const useBookStore = create<BookStore>()(
       // Book management
       createBook: (title: string, author: string, genre: string) => {
         const book = bookOperations.createBook(title, author, genre);
-        set({ book, error: null });
+        // Ensure research chapter exists for the new book
+        const bookWithResearchChapter = bookOperations.ensureResearchChapter(book);
+        set({ book: bookWithResearchChapter, error: null });
       },
       
       loadBook: (jsonData: string) => {
         try {
           set({ isLoading: true, error: null });
           const book = bookOperations.loadBook(jsonData);
-          set({ book, isLoading: false, error: null });
+          // Ensure research chapter exists for the loaded book
+          const bookWithResearchChapter = bookOperations.ensureResearchChapter(book);
+          set({ book: bookWithResearchChapter, isLoading: false, error: null });
         } catch (error) {
           set({ 
             error: error instanceof Error ? error.message : 'Failed to load book',
@@ -211,16 +220,41 @@ export const useBookStore = create<BookStore>()(
       updateResearchEntry: (entryId: string, updates: Partial<ResearchEntry>) => {
         const { book } = get();
         if (!book) return;
-        
+
         const updatedBook = bookOperations.updateResearchEntry(book, entryId, updates);
         set({ book: updatedBook });
       },
-      
+
       deleteResearchEntry: (entryId: string) => {
         const { book } = get();
         if (!book) return;
-        
+
         const updatedBook = bookOperations.deleteResearchEntry(book, entryId);
+        set({ book: updatedBook });
+      },
+
+      // Research chapter operations
+      addResearchScene: (entryData) => {
+        const { book } = get();
+        if (!book) return;
+
+        const updatedBook = bookOperations.addResearchScene(book, entryData);
+        set({ book: updatedBook });
+      },
+
+      updateResearchScene: (sceneId: string, updates: Partial<Scene>) => {
+        const { book } = get();
+        if (!book) return;
+
+        const updatedBook = bookOperations.updateResearchScene(book, sceneId, updates);
+        set({ book: updatedBook });
+      },
+
+      deleteResearchScene: (sceneId: string) => {
+        const { book } = get();
+        if (!book) return;
+
+        const updatedBook = bookOperations.deleteResearchScene(book, sceneId);
         set({ book: updatedBook });
       },
       

@@ -23,6 +23,12 @@ export default function BookEditor() {
     return () => clearInterval(interval);
   }, [book?.settings?.autoSave, book?.settings?.autoSaveInterval]);
 
+  // Handle tab changes for conversation context
+  useEffect(() => {
+    // When switching tabs, the chat components will handle setting the correct conversation mode
+    // through their useEffect hooks, so no additional logic needed here
+  }, [activeTab]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
@@ -173,6 +179,7 @@ export default function BookEditor() {
             )}
             {activeTab === 'research' && (
               <ResearchChat
+                currentSceneId={currentSceneId}
                 onResearchUpdate={(entry) => {
                   useBookStore.getState().addResearchEntry(entry);
                 }}

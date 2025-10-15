@@ -24,6 +24,7 @@
     "@tiptap/react": "^3.6.6",
     "@tiptap/starter-kit": "^3.6.6",
     "@types/js-yaml": "^4.0.9",
+    "dexie": "^4.2.1",
     "idb": "^8.0.3",
     "js-yaml": "^4.1.0",
     "marked": "^16.4.0",

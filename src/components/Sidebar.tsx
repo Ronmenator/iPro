@@ -144,6 +144,7 @@ export default function Sidebar({ book, currentSceneId, onSceneSelect, onTabChan
           </div>
         ) : (
           <div className="p-2">
+            {/* Regular chapters */}
             {book.chapters.map((chapter) => (
               <div key={chapter.id} className="mb-2">
                 {/* Chapter Header */}
@@ -214,6 +215,53 @@ export default function Sidebar({ book, currentSceneId, onSceneSelect, onTabChan
                 )}
               </div>
             ))}
+
+            {/* Research Chapter */}
+            {book.researchChapter && (
+              <div key={book.researchChapter.id} className="mb-2">
+                <div className="flex items-center justify-between p-2 bg-purple-50 dark:bg-purple-900/20 rounded">
+                  <button
+                    onClick={() => toggleChapter(book.researchChapter!.id)}
+                    className="flex items-center space-x-2 flex-1 text-left"
+                  >
+                    <span className="text-sm">
+                      {expandedChapters.has(book.researchChapter!.id) ? '▼' : '▶'}
+                    </span>
+                    <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                      {book.researchChapter.title}
+                    </span>
+                    <span className="text-xs text-purple-600 dark:text-purple-400">
+                      ({book.researchChapter.scenes.length} items)
+                    </span>
+                  </button>
+                </div>
+
+                {expandedChapters.has(book.researchChapter.id) && (
+                  <div className="ml-4 mt-1 space-y-1">
+                    {book.researchChapter.scenes.map((scene) => (
+                      <div
+                        key={scene.id}
+                        className={`flex items-center justify-between p-2 rounded cursor-pointer ${
+                          currentSceneId === scene.id
+                            ? 'bg-purple-100 dark:bg-purple-900'
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                        onClick={() => onSceneSelect(scene.id)}
+                      >
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            {scene.title}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {scene.currentWords} words
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

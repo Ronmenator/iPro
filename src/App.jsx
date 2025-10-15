@@ -1,10 +1,13 @@
 import { ThemeProvider } from './context/ThemeContext'
+import { ConversationProvider } from './context/ConversationContext'
 import BookEditor from './components/BookEditor'
 
 function App() {
   return (
     <ThemeProvider>
-      <BookEditor />
+      <ConversationProvider>
+        <BookEditor />
+      </ConversationProvider>
     </ThemeProvider>
   )
 }

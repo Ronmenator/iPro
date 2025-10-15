@@ -12,11 +12,12 @@ export interface Book {
   createdAt: number;
   lastModified: number;
   version: string;
-  
+
   // Book structure
   chapters: Chapter[];
   research: ResearchEntry[];
-  
+  researchChapter?: Chapter; // Special chapter containing research entries as scenes
+
   // Settings
   settings: BookSettings;
 }
@@ -125,6 +126,13 @@ export interface BookOperations {
   addResearchEntry: (book: Book, entry: Omit<ResearchEntry, 'id' | 'createdAt' | 'lastModified'>) => Book;
   updateResearchEntry: (book: Book, entryId: string, updates: Partial<ResearchEntry>) => Book;
   deleteResearchEntry: (book: Book, entryId: string) => Book;
+
+  // Research chapter operations
+  getResearchChapter: (book: Book) => Chapter | undefined;
+  ensureResearchChapter: (book: Book) => Book;
+  addResearchScene: (book: Book, entry: Omit<ResearchEntry, 'id' | 'createdAt' | 'lastModified'>) => Book;
+  updateResearchScene: (book: Book, sceneId: string, updates: Partial<Scene>) => Book;
+  deleteResearchScene: (book: Book, sceneId: string) => Book;
   
   // Settings operations
   updateSettings: (book: Book, settings: Partial<BookSettings>) => Book;
